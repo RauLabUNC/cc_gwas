@@ -21,7 +21,6 @@ phenotype_of_interest <- args[1]
 
 #So, I've modified this file such that it has a column (strain_clean) that has
 #just the strain names, nothing more.
-
 phenotypes <- read.csv("data/raw/phenotypes/full_cc_panel_data_04_16_24.csv")
 
 phenotypes_ctrl <- phenotypes[phenotypes$Drug=="Ctrl",]

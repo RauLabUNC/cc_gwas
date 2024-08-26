@@ -4,14 +4,13 @@
 
 library(sparcc)
 library(miqtl)
-#Run GWAS
-setwd("D:/Work/1- Projects/Collaborative Cross/ISO Project/GWAS/miQTL")
 
-genomecache <- "./CC_Genome_Cache_Clean_w_Founders"
-genomecache2 = "./CC_Genome_Cache/CC_Genome_Cache"
+genomecache <- "data/raw/genomes/CC_Genome_Cache_Clean_w_Founders"
+genomecache2 <- "data/raw/genomes/CC_Genome_Cache"
 
-
-
+# Read in the first trailing argument for phenotype
+args <- commandArgs(trailingOnly = TRUE)
+phenotype_of_interest <- readRDS(args[1])
 #This will simulate phenotypes.  It only works without founder lines.
 
 #phenotypes <- sim.CC.data(genomecache = genomecache2, 
@@ -24,9 +23,9 @@ genomecache2 = "./CC_Genome_Cache/CC_Genome_Cache"
 #So, I've modified this file such that it has a column (strain_clean) that has
 #just the strain names, nothing more.
 
-phenotypes=read.csv("Full CC Panel Data_04_16_24.csv")
+phenotypes <- read.csv("full_cc_panel_data_04_16_24.csv")
 
-phenotypes_ctrl=phenotypes[phenotypes$Drug=="Ctrl",]
+phenotypes_ctrl <- phenotypes[phenotypes$Drug=="Ctrl",]
 
 # QTL scan using ROP
 
@@ -34,7 +33,7 @@ miqtl.rop.scan = scan.h2lmm(genomecache = genomecache,
                             data = phenotypes_ctrl,
                             pheno.id="Strain_Clean",
                             geno.id="Strain_Clean",
-                            formula = BW.day.0 ~ 1, #This is how you can incorporate covariates like sex or... other things.
+                            formula = phenotype_of_interest ~ 1, #This is how you can incorporate covariates like sex or... other things.
                             use.multi.impute = F,
                             return.allele.effects = T)
 
