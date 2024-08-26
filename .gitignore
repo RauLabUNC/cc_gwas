@@ -50,3 +50,9 @@ rsconnect/
 
 # Data files
 data/
+
+# Snakefiles
+.snakemake/
+
+# Slurmlogs
+.slurmlogs/

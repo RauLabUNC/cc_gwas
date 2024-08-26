@@ -6,7 +6,7 @@ This repository contains the genetics analysis code and data for the collaborati
 
 The Collaborative Cross (CC) is a powerful genetic resource that enables the study of complex traits in mice. It is a panel of recombinant inbred strains derived from eight founder strains, designed to capture the genetic diversity found in natural populations. In this project, we leverage the CC to perform Genome-Wide Association Studies (GWAS) and Quantitative Trait Locus (QTL) mapping to identify genetic variants associated with heart failure. 
 
-![CC structure](repo/cc_structure.jpg)
+![CC structure](https://github.com/RauLabUNC/cc_gwas/blob/main/repo/gr1_lrg.jpg?raw=true)
 
 **Collaborative Cross: A tool for discovery population genetics at scale**
 
@@ -25,6 +25,12 @@ Once the repo is completed, users may reproduce the analysis by doing the follow
 1. Clone this repository to a high-performance computing cluster with SLURM job scheduling.
 2. Install the required dependencies listed in the `requirements.txt` file.*
 3. Run `bash snake.sh` in the main project directory to execute the Snakemake job scheduler
+
+## Snakemake Workflow
+
+The order of script execution is visualized in this directed acyclic graph:
+
+![DAG Plot](https://github.com/RauLabUNC/cc_gwas/blob/main/repo/dag.svg?raw=true)
 
 ## To-Do
 This repo is still in its early stages, with many remaining items to complete.

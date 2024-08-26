@@ -10,4 +10,4 @@ module load python/3.9.6
 
 snakemake -j 36 --latency-wait 60 --cluster "sbatch --mem=3000 -N 1 -n 1 -o ./.slurmlogs/%j.out" --keep-going
 
-snakemake --rulegraph | dot -Tsvg > dag.svg
+snakemake --rulegraph | dot -Tsvg > repo/dag.svg
