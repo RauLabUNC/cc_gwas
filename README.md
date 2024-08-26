@@ -10,7 +10,7 @@ The Collaborative Cross (CC) is a powerful genetic resource that enables the stu
 
 **Collaborative Cross: A tool for discovery population genetics at scale**
 
-This figure illustrates the genetic diversity and structure of the primary advanced mouse strains used in the study. The founder strains consist of five common laboratory inbred strains and three wild-derived inbred strains, capturing a significant portion of the genetic variation observed in Mus musculus. The Collaborative Cross strains are eight-way recombinant inbred strains derived from the founders, while the Diversity Outbred mice (not used in this study) are the result of continuous outbreeding, leading to dense recombination of genome structure and high heterozygosity. These mouse strains serve as valuable tools for investigating the genetic basis of complex traits.
+This figure illustrates the genetic diversity and structure of the mouse strains used in the study. The founder strains consist of five common laboratory inbred strains and three wild-derived inbred strains, capturing a significant portion of the genetic variation observed in Mus musculus. The Collaborative Cross strains are eight-way recombinant inbred strains derived from the founders, while the Diversity Outbred mice (not used in this study) are the result of continuous outbreeding, leading to dense recombination of genome structure and high heterozygosity. These mouse strains serve as valuable tools for investigating the genetic basis of complex traits. Figure sourced from [Saul 2019](https://www.cell.com/trends/genetics/fulltext/S0168-9525%2819%2930065-4).
 
 ## Repository Structure
 
