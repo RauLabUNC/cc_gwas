@@ -56,3 +56,9 @@ data/
 
 # Slurmlogs
 .slurmlogs/
+
+# Results
+results/
+
+# Genome generation
+make_genome_files/
