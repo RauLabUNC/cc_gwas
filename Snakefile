@@ -4,13 +4,52 @@ PHENOS = ["BW.day.0", "BW.day.28", "TH", "LV", "RV", "LA", "RA", "Lung", "Liver"
 # Define the final target
 rule all:
     input:
-        expand("data/processed/scans/{pheno}_scan_results.rds", pheno=PHENOS)
+        expand("results/genome_scans/{pheno}_scan_results.png", pheno=PHENOS),
+        expand("results/genome_scans_thresholds/{pheno}_scan_threshold.png", pheno=PHENOS)
 
+# Rule to average phenotypes
+rule average_phenotypes:
+    output:
+        "data/processed/phenotypes/mean_cc_panel_04_16_24.csv"
+    shell:
+        "Rscript scripts/01_00_average_phenos.R"
 # Rule to run miQTL_ROP_scan.R for each phenotype
 rule run_miQTL_ROP_scan:
+    input:
+        "data/processed/phenotypes/mean_cc_panel_04_16_24.csv"
     output:
         "data/processed/scans/{PHENOS}_scan_results.rds"
     resources:
         mem_gb=4
     shell:
         "Rscript scripts/01_01_miQTL_ROP_scan.R {wildcards.PHENOS}"
+
+rule plot_miQTL_ROP_scan:
+    input:
+        "data/processed/scans/{PHENOS}_scan_results.rds"
+    output:
+        "results/genome_scans/{PHENOS}_scan_results.png"
+    resources:
+        mem_gb=4
+    shell:
+        "Rscript scripts/01_02_plot_scan.R {wildcards.PHENOS}"
+
+
+rule threshold_miQTL_ROP_scan:
+    input:
+        "data/processed/scans/{PHENOS}_scan_results.rds"
+    output:
+        
+    resources:
+        mem_gb=4
+    shell:
+        "Rscript scripts/02_01_permutation.R  {wildcards.PHENOS}"
+
+rule plot_threshold_scan:
+    input:
+        "data/processed/scans/{PHENOS}_scan_results.rds",
+        "data/processed/scan_thresholds/{PHENOS}_threshold.rds"
+    output:
+        "results/genome_scans_thresholds/{PHENOS}_scan_threshold.png"
+    shell:
+        "Rscript scripts/02_02_plot_permutation.R  {wildcards.PHENOS}"

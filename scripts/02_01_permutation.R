@@ -140,24 +140,24 @@ generate.sample.outcomes.matrix2=function (scan.object, model.type = c("null", "
 
 
 
-
 # Load libraries
 library(miqtl)
-
+library(tidyverse)
 # Read in the first trailing argument for phenotype
 args <- commandArgs(trailingOnly = TRUE)
-phenotype_of_interest <-"Adrenal"#args[1]
+phenotype_of_interest <- args[1]
 
 
 # Load the data
 scan_file <- file.path("data/processed/scans", paste0(as.character(phenotype_of_interest), "_scan_results.rds"))
 scan <- readRDS(scan_file)
 
-# Load phenotypes
-phenotypes <- read.csv("data/raw/phenotypes/full_cc_panel_data_04_16_24.csv")
-phenotypes_ctrl <- phenotypes[phenotypes$Drug=="Ctrl",]
-# Make column of interest into numeric type
-phenotypes_ctrl[,phenotype_of_interest] <- as.numeric(phenotypes_ctrl[,phenotype_of_interest])
+#So, I've modified this file such that it has a column (strain_clean) that has
+#just the strain names, nothing more.
+phenotypes <- read.csv("data/processed/phenotypes/mean_cc_panel_04_16_24.csv")
+
+phenotypes_ctrl <- phenotypes |> 
+  filter(Drug_Clean == 0 & Sex_Clean == 0 & !is.na(get(phenotype_of_interest)))
 
 # Load genome cache
 genomecache <- "data/raw/genomes/CC_Genome_Cache_Clean_w_Founders"
@@ -168,7 +168,7 @@ genomecache <- "data/raw/genomes/CC_Genome_Cache_Clean_w_Founders"
 #of the file...
 
 permuted_phenotype <- generate.sample.outcomes.matrix2(scan.object = scan, 
-                                                      method = "permutation", num.samples = 1)
+                                                      method = "permutation", num.samples = 15)
 start <- Sys.time()
 permuted_scans <- run.threshold.scans(sim.threshold.object = permuted_phenotype, 
                                       keep.full.scans=TRUE,
@@ -194,27 +194,3 @@ output_scan <- file.path(output_dir, paste0(as.character(phenotype_of_interest),
 # Save the threshold and scan as RDS files
 saveRDS(permute_threshold, output_threshold)
 saveRDS(permuted_scans, output_scan)
-
-
-# Plot the results
-output_dir <- "results/genome_scans_thresholds"
-# Ensure the directory exists
-if (!dir.exists(output_dir)) {
-  dir.create(output_dir, recursive = TRUE)
-}
-
-
-png_name <- file.path(output_dir, paste0(as.character(phenotype_of_interest), "_scan_threshold.png"))
-png(file = png_name,
-    width = 8, 
-    height = 4,
-    units = "in",
-    res = 600)
-
-genome.plotter.whole(scan.list=list(ROP = data), 
-                     hard.thresholds = permute_threshold)
-
-dev.off()
-
-
-
