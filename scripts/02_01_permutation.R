@@ -139,6 +139,72 @@ generate.sample.outcomes.matrix2=function (scan.object, model.type = c("null", "
 }
 
 
+run.threshold.scans.brian <- function (sim.threshold.object, outcome.type = c("outcome", "index"), 
+          keep.full.scans = TRUE, scan.index = NULL, genomecache, data, 
+          use.multi.impute = TRUE, num.imp = 11, chr = "all", just.these.loci = NULL, 
+          scan.seed = 1, ...) 
+{
+  outcome.type <- outcome.type[1]
+  y.matrix <- sim.threshold.object$y.matrix
+  formula <- sim.threshold.object$formula
+  model <- sim.threshold.object$model
+  weights <- sim.threshold.object$weights
+  K <- sim.threshold.object$K
+  pheno.id <- names(sim.threshold.object$impute.map)[1]
+  geno.id <- names(sim.threshold.object$impute.map)[2]
+  if (is.null(scan.index)) {
+    scan.index <- 1:ncol(y.matrix)
+  }
+  h <- DiploprobReader$new(genomecache)
+  loci <- h$getLoci()
+  loci.chr <- h$getChromOfLocus(loci)
+  if (chr[1] != "all") {
+    loci.chr <- h$getChromOfLocus(loci)
+    loci <- loci[loci.chr %in% chr]
+  }
+  if (!is.null(just.these.loci)) {
+    loci <- loci[loci %in% just.these.loci]
+    loci.chr <- loci.chr[loci %in% just.these.loci]
+  }
+  full.p <- full.lod <- these.chr <- these.pos <- NULL
+  if (keep.full.scans) {
+    full.p <- full.lod <- matrix(NA, nrow = length(scan.index), 
+                                 ncol = length(loci))
+    colnames(full.p) <- colnames(full.lod) <- loci
+    these.chr <- h$getChromOfLocus(loci)
+    these.pos <- list(Mb = h$getLocusStart(loci, scale = "Mb"), 
+                      cM = h$getLocusStart(loci, scale = "cM"))
+  }
+  min.p <- max.lod <- rep(NA, length(scan.index))
+  iteration.formula <- formula(paste0("new_y ~ ", unlist(strsplit(formula, 
+                                                                  split = "~"))[-1]))
+  for (i in scan.index) {
+    new.y <- data.frame(y.matrix[, i], rownames(y.matrix))
+    names(new.y) <- c("new_y", pheno.id)
+    this.data <- merge(x = new.y, y = data, by = pheno.id, 
+                       all.x = TRUE)
+    if (outcome.type == "index") {
+      this.data[, all.vars(as.formula(formula))[1]] <- this.data[, 
+                                                                 all.vars(as.formula(formula))[1]][this.data$new_y]
+      iteration.formula <- formula(formula)
+    }
+    this.scan <- scan.h2lmm(genomecache = genomecache, data = this.data, 
+                            formula = iteration.formula, K = K, model = model, 
+                            use.multi.impute = use.multi.impute, num.imp = num.imp, 
+                            pheno.id = pheno.id, geno.id = geno.id, seed = scan.seed, 
+                            weights = weights, chr = chr, use.progress.bar = T, use.fix.par = T)
+    if (keep.full.scans) {
+      full.p[i, ] <- this.scan$p.value
+      full.lod[i, ] <- this.scan$LOD
+    }
+    min.p[i] <- min(this.scan$p.value)
+    max.lod[i] <- max(this.scan$LOD)
+    cat("\n", "Threshold scan:", i, "complete", "\n")
+  }
+  return(list(full.results = list(LOD = full.lod, p.value = full.p, 
+                                  chr = these.chr, pos = these.pos), max.statistics = list(LOD = max.lod, 
+                                                                                           p.value = min.p)))
+}
 
 # Load libraries
 library(miqtl)
@@ -154,13 +220,33 @@ scan <- readRDS(scan_file)
 
 #So, I've modified this file such that it has a column (strain_clean) that has
 #just the strain names, nothing more.
-phenotypes <- read.csv("data/processed/phenotypes/mean_cc_panel_04_16_24.csv")
+phenotypes <- read.csv("data/processed/phenotypes/mean_cc_panel_08_06_24.csv")
+
 
 phenotypes_ctrl <- phenotypes |> 
-  filter(Drug_Clean == 0 & Sex_Clean == 0 & !is.na(get(phenotype_of_interest)))
+  filter(!is.na(get(phenotype_of_interest)) & Drug_Clean == 0)
+
+# Create a function to remove outliers for each given phenotype
+remove_outliers <- function(data, variables) {
+  for (var in variables) {
+    # Calculate the lower and upper bounds for outliers
+    q1 <- quantile(data[[var]], 0.25)
+    q3 <- quantile(data[[var]], 0.75)
+    iqr <- q3 - q1
+    lower_bound <- q1 - 1.5 * iqr
+    upper_bound <- q3 + 1.5 * iqr
+    
+    # Remove outliers
+    data <- data[!(data[[var]] < lower_bound | data[[var]] > upper_bound), ]
+  }
+  
+  return(data)
+}
+
+phenotypes_ctrl <- remove_outliers(phenotypes_ctrl, phenotype_of_interest)
 
 # Load genome cache
-genomecache <- "data/raw/genomes/CC_Genome_Cache_Clean_w_Founders"
+genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 
 #not sure what the right N should be here.  10 seems low.
 #okay, the original one breaks at a point trying to generate a variable that it
@@ -168,9 +254,10 @@ genomecache <- "data/raw/genomes/CC_Genome_Cache_Clean_w_Founders"
 #of the file...
 
 permuted_phenotype <- generate.sample.outcomes.matrix2(scan.object = scan, 
-                                                      method = "permutation", num.samples = 15)
+                                                      method = "permutation", num.samples = 50,
+                                                      use.BLUP = T)
 start <- Sys.time()
-permuted_scans <- run.threshold.scans(sim.threshold.object = permuted_phenotype, 
+permuted_scans <- run.threshold.scans.brian(sim.threshold.object = permuted_phenotype, 
                                       keep.full.scans=TRUE,
                                       genomecache  = genomecache, 
                                       data = phenotypes_ctrl,
@@ -178,7 +265,7 @@ permuted_scans <- run.threshold.scans(sim.threshold.object = permuted_phenotype,
                                       scan.seed = 1)
 end <- Sys.time()
 permute_threshold <- get.gev.thresholds(threshold.scans = permuted_scans, 
-                                        percentile = 0.95)
+                                        percentile = 0.85) # 10.1186/s40168-023-01552-8 uses this percentile
 
 
 # Ensure the directory exists

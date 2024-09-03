@@ -34,12 +34,11 @@ rule plot_miQTL_ROP_scan:
     shell:
         "Rscript scripts/01_02_plot_scan.R {wildcards.PHENOS}"
 
-
 rule threshold_miQTL_ROP_scan:
     input:
         "data/processed/scans/{PHENOS}_scan_results.rds"
     output:
-        
+        "data/processed/scan_thresholds/{PHENOS}_threshold.rds"
     resources:
         mem_gb=4
     shell:
