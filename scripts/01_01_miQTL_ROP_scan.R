@@ -11,44 +11,28 @@ genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 args <- commandArgs(trailingOnly = TRUE)
 phenotype_of_interest <- args[1]
 
-
 #So, I've modified this file such that it has a column (strain_clean) that has
 #just the strain names, nothing more.
-phenotypes <- read.csv("data/processed/phenotypes/mean_cc_panel_08_06_24.csv")
+phenotypes <- read.csv("data/processed/phenotypes/no_outliers_cc_panel_08_06_24.csv")
 
 phenotypes_ctrl <- phenotypes |> 
-  filter(!is.na(get(phenotype_of_interest)) & Drug_Clean == 0)
+  filter(!is.na(get(phenotype_of_interest)))
 
-# Create a function to remove outliers for each given phenotype
-remove_outliers <- function(data, variables) {
-  for (var in variables) {
-    # Calculate the lower and upper bounds for outliers
-    q1 <- quantile(data[[var]], 0.25)
-    q3 <- quantile(data[[var]], 0.75)
-    iqr <- q3 - q1
-    lower_bound <- q1 - 1.5 * iqr
-    upper_bound <- q3 + 1.5 * iqr
-    
-    # Remove outliers
-    data <- data[!(data[[var]] < lower_bound | data[[var]] > upper_bound), ]
-  }
-  
-  return(data)
-}
-
-phenotypes_ctrl <- remove_outliers(phenotypes_ctrl, phenotype_of_interest)
-
+# Make co-variates categorical
+phenotypes_ctrl <- phenotypes_ctrl |>
+  mutate(Sex_Clean = as.factor(Sex_Clean),
+         Drug_Clean = as.factor(Drug_Clean))
 
 # Use phenotype_of_interest in the scan.h2lmm function
-
 miqtl.rop.scan <- scan.h2lmm(
                             genomecache = genomecache,
                             data = phenotypes_ctrl,
                             pheno.id="Strain_Clean",
                             geno.id="Strain_Clean",
-                            formula = get(phenotype_of_interest) ~ 1 + Sex_Clean,  #This is how you can incorporate co-variates
+                            formula = get(phenotype_of_interest) ~ 1 + Sex_Clean + Drug_Clean,  #This is how you can incorporate co-variates
                             use.multi.impute = F,
-                            return.allele.effects = T)
+                            return.allele.effects = T, 
+                            use.fix.par = T)
 
 # Ensure the directory exists
 output_dir <- "data/processed/scans"

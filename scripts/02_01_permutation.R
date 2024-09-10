@@ -220,30 +220,11 @@ scan <- readRDS(scan_file)
 
 #So, I've modified this file such that it has a column (strain_clean) that has
 #just the strain names, nothing more.
-phenotypes <- read.csv("data/processed/phenotypes/mean_cc_panel_08_06_24.csv")
+phenotypes <- read.csv("data/processed/phenotypes/no_outliers_cc_panel_08_06_24.csv")
 
 
 phenotypes_ctrl <- phenotypes |> 
-  filter(!is.na(get(phenotype_of_interest)) & Drug_Clean == 0)
-
-# Create a function to remove outliers for each given phenotype
-remove_outliers <- function(data, variables) {
-  for (var in variables) {
-    # Calculate the lower and upper bounds for outliers
-    q1 <- quantile(data[[var]], 0.25)
-    q3 <- quantile(data[[var]], 0.75)
-    iqr <- q3 - q1
-    lower_bound <- q1 - 1.5 * iqr
-    upper_bound <- q3 + 1.5 * iqr
-    
-    # Remove outliers
-    data <- data[!(data[[var]] < lower_bound | data[[var]] > upper_bound), ]
-  }
-  
-  return(data)
-}
-
-phenotypes_ctrl <- remove_outliers(phenotypes_ctrl, phenotype_of_interest)
+  filter(!is.na(get(phenotype_of_interest)))
 
 # Load genome cache
 genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
@@ -254,16 +235,16 @@ genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 #of the file...
 
 permuted_phenotype <- generate.sample.outcomes.matrix2(scan.object = scan, 
-                                                      method = "permutation", num.samples = 50,
-                                                      use.BLUP = T)
-start <- Sys.time()
+                                                      method = "permutation", num.samples = 20,
+                                                      use.BLUP = T, model.type = "alt")
+
 permuted_scans <- run.threshold.scans.brian(sim.threshold.object = permuted_phenotype, 
                                       keep.full.scans=TRUE,
                                       genomecache  = genomecache, 
                                       data = phenotypes_ctrl,
                                       use.multi.impute = FALSE, 
                                       scan.seed = 1)
-end <- Sys.time()
+
 permute_threshold <- get.gev.thresholds(threshold.scans = permuted_scans, 
                                         percentile = 0.85) # 10.1186/s40168-023-01552-8 uses this percentile
 
