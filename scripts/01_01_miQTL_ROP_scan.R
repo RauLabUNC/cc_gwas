@@ -16,23 +16,19 @@ phenotype_of_interest <- args[1]
 phenotypes <- read.csv("data/processed/phenotypes/no_outliers_cc_panel_08_06_24.csv")
 
 phenotypes_ctrl <- phenotypes |> 
+  mutate(pheno.id = paste(Strain_Clean, Sex_Clean, Drug_Clean, sep = "_")) |> 
   filter(!is.na(get(phenotype_of_interest)))
-
-# Make co-variates categorical
-phenotypes_ctrl <- phenotypes_ctrl |>
-  mutate(Sex_Clean = as.factor(Sex_Clean),
-         Drug_Clean = as.factor(Drug_Clean))
 
 # Use phenotype_of_interest in the scan.h2lmm function
 miqtl.rop.scan <- scan.h2lmm(
-                            genomecache = genomecache,
-                            data = phenotypes_ctrl,
-                            pheno.id="Strain_Clean",
-                            geno.id="Strain_Clean",
-                            formula = get(phenotype_of_interest) ~ 1 + Sex_Clean + Drug_Clean,  #This is how you can incorporate co-variates
-                            use.multi.impute = F,
-                            return.allele.effects = T, 
-                            use.fix.par = T)
+  genomecache = genomecache,
+  data = phenotypes_ctrl,
+  pheno.id="pheno.id",
+  geno.id="Strain_Clean",
+  formula = get(phenotype_of_interest) ~ 1 + Sex_Clean + Drug_Clean,  #This is how you can incorporate co-variates
+  use.multi.impute = F,
+  return.allele.effects = T, 
+  use.fix.par = T)
 
 # Ensure the directory exists
 output_dir <- "data/processed/scans"
