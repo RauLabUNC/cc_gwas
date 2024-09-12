@@ -11,23 +11,27 @@ genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 args <- commandArgs(trailingOnly = TRUE)
 phenotype_of_interest <- args[1]
 
-#So, I've modified this file such that it has a column (strain_clean) that has
-#just the strain names, nothing more.
+#Load in phenotype data
 phenotypes <- read.csv("data/processed/phenotypes/no_outliers_cc_panel_08_06_24.csv")
 
-phenotypes_ctrl <- phenotypes |> 
-  mutate(pheno.id = paste(Strain_Clean, Sex_Clean, Drug_Clean, sep = "_")) |> 
-  filter(!is.na(get(phenotype_of_interest)))
+# Remove NAs, summarize groups to means, and scale
+scaled_phenotypes <- phenotypes |> 
+  filter(!is.na(get(phenotype_of_interest))) |>
+  group_by(Strain_Clean, Drug_Clean, Sex_Clean, pheno.id) |> 
+  summarize(across(BW.day.0:Percent.Fibrosis, ~mean(as.numeric(.), na.rm = TRUE))) |>
+  ungroup() |> 
+  mutate(across(BW.day.0:Percent.Fibrosis, ~ (. - mean(., na.rm = T))/sd(., na.rm = T))) |> 
+  as.data.frame()
 
-# Use phenotype_of_interest in the scan.h2lmm function
-miqtl.rop.scan <- scan.h2lmm(
+# Run genome scan
+miqtl.rop.scan.scaled <- scan.h2lmm(
   genomecache = genomecache,
-  data = phenotypes_ctrl,
+  data = scaled_phenotypes,
   pheno.id="pheno.id",
   geno.id="Strain_Clean",
-  formula = get(phenotype_of_interest) ~ 1 + Sex_Clean + Drug_Clean,  #This is how you can incorporate co-variates
+  formula = get(phenotype_of_interest) ~ 0 + Sex_Clean + Drug_Clean,  #This is how you can incorporate co-variates
   use.multi.impute = F,
-  return.allele.effects = T, 
+  return.allele.effects = T,
   use.fix.par = T)
 
 # Ensure the directory exists

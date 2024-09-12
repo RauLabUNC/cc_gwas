@@ -1,10 +1,3 @@
-#Permutation.  This will get us the appropriate GWAS significance cutoff.  We 
-# *probably* only have to do this once per condition we try - basically, as long as 
-# the number of SNPs and Strains tested don't change and the nature of the data
-# doesn't change much either (so ctrl vs ISO, for example), things should be fairly stable.
-# but if this is all running in the background on the cluster and its fast enough... might as well
-# do it every time :) 
-
 # Load libraries
 library(miqtl)
 library(tidyverse)
@@ -16,21 +9,25 @@ phenotype_of_interest <- args[1]
 scan_file <- file.path("data/processed/scans", paste0(as.character(phenotype_of_interest), "_scan_results.rds"))
 scan <- readRDS(scan_file)
 
-#So, I've modified this file such that it has a column (strain_clean) that has
-#just the strain names, nothing more.
+# Load phenotypes
 phenotypes <- read.csv("data/processed/phenotypes/no_outliers_cc_panel_08_06_24.csv")
 
+# Remove NAs, summarize groups to means, and scale
+scaled_phenotypes <- phenotypes |> 
+  filter(!is.na(get(phenotype_of_interest))) |>
+  group_by(Strain_Clean, Drug_Clean, Sex_Clean, pheno.id) |> 
+  summarize(across(BW.day.0:Percent.Fibrosis, ~mean(as.numeric(.), na.rm = TRUE))) |>
+  ungroup() |> 
+  mutate(across(BW.day.0:Percent.Fibrosis, ~ (. - mean(., na.rm = T))/sd(., na.rm = T))) |> 
+  as.data.frame()
 
-phenotypes_ctrl <- phenotypes |> 
-  mutate(pheno.id = paste(Strain_Clean, Sex_Clean, Drug_Clean, sep = "_")) |> 
-  filter(!is.na(get(phenotype_of_interest)))
 
 # Load genome cache
 genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 
 # Permute phenotypes and run scans on each
 permuted_phenotype <- generate.sample.outcomes.matrix(scan.object = scan, 
-                                                      method = "permutation", num.samples = 5,
+                                                      method = "permutation", num.samples = 20,
                                                       use.BLUP = T, model.type = "null")
 
 permuted_scans <- run.threshold.scans(sim.threshold.object = permuted_phenotype, 
@@ -41,7 +38,7 @@ permuted_scans <- run.threshold.scans(sim.threshold.object = permuted_phenotype,
                                       scan.seed = 1)
 
 permute_threshold <- get.gev.thresholds(threshold.scans = permuted_scans, 
-                                        percentile = 0.95) # 10.1186/s40168-023-01552-8 uses this percentile
+                                        percentile = 0.9) # 10.1186/s40168-023-01552-8 uses 85 percentile
 
 
 # Ensure the directory exists
