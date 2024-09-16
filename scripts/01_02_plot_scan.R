@@ -6,11 +6,11 @@ phenotype_of_interest <- args[1]
 
 
 # Load the data
-data_file <- file.path("data/processed/scans", paste0(as.character(phenotype_of_interest), "_scan_results.rds"))
+data_file <- file.path("data/processed/scans", args[2], paste0(as.character(phenotype_of_interest), "_scan_results.rds"))
 data <- readRDS(data_file)
 
 # Plot the results
-output_dir <- "results/genome_scans"
+output_dir <- file.path("results/genome_scans", args[2])
 if (!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
 }

@@ -1,12 +1,18 @@
 # Load libraries
 library(miqtl)
 library(tidyverse)
-# Read in the first trailing argument for phenotype
+# Read in the first trailing argument for phenotype and treatment
 args <- commandArgs(trailingOnly = TRUE)
 phenotype_of_interest <- args[1]
 
+if(args[2] == "control"){
+  treatment <- "0"
+}else{
+  treatment <- "1"
+}
+
 # Load the data
-scan_file <- file.path("data/processed/scans", paste0(as.character(phenotype_of_interest), "_scan_results.rds"))
+scan_file <- file.path("data/processed/scans", args[2], paste0(as.character(phenotype_of_interest), "_scan_results.rds"))
 scan <- readRDS(scan_file)
 
 # Load phenotypes
@@ -14,7 +20,7 @@ phenotypes <- read.csv("data/processed/phenotypes/no_outliers_cc_panel_08_06_24.
 
 # Remove NAs, summarize groups to means, and scale
 scaled_phenotypes <- phenotypes |> 
-  filter(!is.na(get(phenotype_of_interest))) |>
+  filter(!is.na(get(phenotype_of_interest)) & Drug_Clean == treatment) |>
   group_by(Strain_Clean, Drug_Clean, Sex_Clean, pheno.id) |> 
   summarize(across(BW.day.0:Percent.Fibrosis, ~mean(as.numeric(.), na.rm = TRUE))) |>
   ungroup() |> 
@@ -27,22 +33,22 @@ genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 
 # Permute phenotypes and run scans on each
 permuted_phenotype <- generate.sample.outcomes.matrix(scan.object = scan, 
-                                                      method = "permutation", num.samples = 20,
+                                                      method = "permutation", num.samples = 40,
                                                       use.BLUP = T, model.type = "null")
 
 permuted_scans <- run.threshold.scans(sim.threshold.object = permuted_phenotype, 
                                       keep.full.scans=TRUE,
                                       genomecache  = genomecache, 
-                                      data = phenotypes_ctrl,
+                                      data = scaled_phenotypes,
                                       use.multi.impute = FALSE, 
                                       scan.seed = 1)
 
 permute_threshold <- get.gev.thresholds(threshold.scans = permuted_scans, 
-                                        percentile = 0.9) # 10.1186/s40168-023-01552-8 uses 85 percentile
+                                        percentile = 0.85) # 10.1186/s40168-023-01552-8 uses 85 percentile
 
 
 # Ensure the directory exists
-output_dir <- "data/processed/scan_thresholds"
+output_dir <- file.path("data/processed/scan_thresholds", args[2])
 if (!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
 }
