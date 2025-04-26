@@ -4,13 +4,14 @@
 #remotes::install_github("gkeele/miqtl")
 library(miqtl) 
 library(tidyverse)
+library(compositions)
 source("scripts/extras/scan_h2lmm.R")
 genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 
 # Read in the first trailing argument for phenotype and treatment
 args <- commandArgs(trailingOnly = TRUE)
 
-#args <- c("CSA", "iso")
+args <- c("Cardiomyocytes", "iso")
 if(args[2] == "control"){
   treatment <- "0"
 }else{
@@ -18,20 +19,20 @@ if(args[2] == "control"){
 }
 
 #Load in phenotype data
-phenotypes <- read.csv("data/processed/phenotypes/meanCenterScaledByTreat_03242025.csv")
-
-phenotypes <- phenotypes |> filter(Drug_Binary == treatment)
+phenotypes <- read.csv("data/processed/phenotypes/meanCenterScaledByTreat_04022025.csv")
+phenotypes <- phenotypes |> filter(Drug_Binary == treatment) |> mutate(PlateNumber = factor(PlateNumber))
 
 # Run genome scan
 miqtl.rop.scan.scaled <- scan.h2lmm.test(
   genomecache = genomecache,
   data = phenotypes,
-  pheno.id="gwas_temp_id",
+  pheno.id="SampleID",
   geno.id="Strain",
   formula = get(args[1]) ~ 0 + Sex_Binary,  #This is how you can incorporate co-variates
   use.multi.impute = F,
   return.allele.effects = T,
-  use.fix.par = T)
+  use.fix.par = T
+  )
 
 # Ensure the directory exists
 output_dir <- file.path("data/processed/scans", args[2])

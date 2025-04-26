@@ -3,7 +3,6 @@ library(miqtl)
 library(tidyverse)
 # Read in the first trailing argument for phenotype and treatment
 args <- commandArgs(trailingOnly = TRUE)
-phenotype_of_interest <- args[1]
 
 if(args[2] == "control"){
   treatment <- "0"
@@ -12,28 +11,22 @@ if(args[2] == "control"){
 }
 
 # Load the data
-scan_file <- file.path("data/processed/scans", args[2], paste0(as.character(phenotype_of_interest), "_scan_results.rds"))
+scan_file <- file.path("data/processed/scans", args[2], paste0(args[1], "_scan_results.rds"))
 scan <- readRDS(scan_file)
 
 # Load phenotypes
-phenotypes <- read.csv("data/processed/phenotypes/no_outliers_cc_panel_08_06_24.csv")
+phenotypes <- read.csv("data/processed/phenotypes/meanCenterScaledByTreat_03242025.csv")
 
 # Remove NAs, summarize groups to means, and scale
 scaled_phenotypes <- phenotypes |> 
-  filter(!is.na(get(phenotype_of_interest)) & Drug_Clean == treatment) |>
-  group_by(Strain_Clean, Drug_Clean, Sex_Clean, pheno.id) |> 
-  summarize(across(BW.day.0:Percent.Fibrosis, ~mean(as.numeric(.), na.rm = TRUE))) |>
-  ungroup() |> 
-  mutate(across(BW.day.0:Percent.Fibrosis, ~ (. - mean(., na.rm = T))/sd(., na.rm = T))) |> 
-  as.data.frame()
-
+  filter(!is.na(args[1]) & Drug_Binary == treatment)
 
 # Load genome cache
 genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 
 # Permute phenotypes and run scans on each
 permuted_phenotype <- generate.sample.outcomes.matrix(scan.object = scan, 
-                                                      method = "permutation", num.samples = 40,
+                                                      method = "permutation", num.samples = 50,
                                                       use.BLUP = T, model.type = "null")
 
 permuted_scans <- run.threshold.scans(sim.threshold.object = permuted_phenotype, 
@@ -54,8 +47,8 @@ if (!dir.exists(output_dir)) {
 }
 
 # Define the output file path based on the phenotype of interest
-output_threshold <- file.path(output_dir, paste0(as.character(phenotype_of_interest), "_threshold.rds"))
-output_scan <- file.path(output_dir, paste0(as.character(phenotype_of_interest), "_scan.rds"))
+output_threshold <- file.path(output_dir, paste0(args[[1]], "_threshold.rds"))
+output_scan <- file.path(output_dir, paste0(args[[1]], "_scan.rds"))
 
 # Save the threshold and scan as RDS files
 saveRDS(permute_threshold, output_threshold)

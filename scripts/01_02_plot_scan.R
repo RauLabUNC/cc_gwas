@@ -2,6 +2,7 @@ library(miqtl)
 
 # Read in the first trailing argument for phenotype
 args <- commandArgs(trailingOnly = TRUE)
+args <- c("Fibroblast", "iso")
 phenotype_of_interest <- args[1]
 
 

@@ -5,10 +5,9 @@
 library(miqtl)
 library(tidyverse)
 
-#args <- c("Delta.LVIDs.d", "control")
+args <- c("CSA", "iso")
 # Load arguments
 args <- commandArgs(trailingOnly = TRUE)
-
 
 # Load the data
 scan_file <- file.path("data/processed/scans", args[2], paste0(args[1], "_scan_results.rds"))
@@ -49,3 +48,4 @@ loci.file <- file.path(output_dir,
   
 # Save the loci as csv file
 write.csv(sig.loci.df, loci.file, row.names = F)
+
