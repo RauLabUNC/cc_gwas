@@ -37,14 +37,14 @@ genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 permuted_phenotype <- generate.sample.outcomes.matrix(
   scan.object = scan, 
   method = "permutation", 
-  num.samples = 30,
+  num.samples = 50,
   use.BLUP = TRUE, 
   model.type = "null"
 )
 
 permuted_scans <- run.threshold.scans(
   sim.threshold.object = permuted_phenotype, 
-  keep.full.scans = TRUE,
+  keep.full.scans = FALSE,
   genomecache = genomecache, 
   data = phenotypes,
   use.multi.impute = FALSE, 
@@ -53,7 +53,7 @@ permuted_scans <- run.threshold.scans(
 
 permute_threshold <- get.gev.thresholds(
   threshold.scans = permuted_scans, 
-  percentile = 0.9
+  percentile = 0.90
 )
 
 # --- Save Outputs ---
