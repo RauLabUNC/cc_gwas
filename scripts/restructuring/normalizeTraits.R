@@ -4,7 +4,6 @@ library(MASS)
 library(optparse)
 
 # Define the command-line arguments
-# Define the command-line arguments
 option_list <- list(
   make_option(c("--input"), type = "character", help = "Path to input phenotype file"),
   make_option(c("--output"), type = "character", help = "Path to output processed phenotype file"),
@@ -15,15 +14,18 @@ option_list <- list(
 # Parse the arguments
 opt <- parse_args(OptionParser(option_list = option_list))
 
-# Print the parsed arguments (for debugging)
-print(opt)
+#opt <- c("input" = "data/raw/phenotypes/CC_Phenotypes_05022025.csv",
+#         "normalization" = "boxcox",
+#         "aggregation" = "individual",
+#         "drug" = "Ctrl",
+#         "output" = "data/processed/phenotypes/boxCoxTest/boxcox_individual_Ctrl.csv")
 
 # Read the input phenotype file
-phenotypes <- read.csv(opt$input)
+phenotypes <- read.csv(opt["input"])
 
 # Filter the data based on the drug treatment
-if (!is.null(opt$drug)) {
-  phenotypes <- phenotypes |> filter(Drug == opt$drug)
+if (!is.null(opt["drug"])) {
+  phenotypes <- phenotypes |> filter(Drug == opt["drug"])
 }
 
 # List columns with measured or extrapolated phenotypes
@@ -35,7 +37,7 @@ traits <- phenotypes |>
 
 # Select columns and set types
 pheno_processed <- phenotypes %>%
-  dplyr::select(-Start.date, -End.date) |> 
+  dplyr::select(-Start.date, -End.date, -Notes) |> 
   mutate(across(all_of(traits), ~ suppressWarnings(as.numeric(as.character(.))))) |> 
   # Convert character columns (like group_columns if they are character) to factors
   mutate(across(where(is.character), as.factor)) 
@@ -43,7 +45,7 @@ pheno_processed <- phenotypes %>%
 # --- Normalization ---
 
 # Extract normalization method from command-line arguments
-normalization_method <- opt$normalization
+normalization_method <- opt["normalization"]
 
 if (normalization_method == "zscore") {
   pheno_processed <- pheno_processed %>%
@@ -90,7 +92,7 @@ if (normalization_method == "zscore") {
    } 
 
 # --- Aggregation ---
-aggregation_method <- opt$aggregation
+aggregation_method <- opt["aggregation"]
 
 # --- Aggregation ---
 if (aggregation_method == "mean") {
@@ -106,7 +108,7 @@ pheno_processed <- pheno_processed %>%
 # --- Save Output ---
 
 # Extract output file path from command-line arguments
-output_file <- opt$output
+output_file <- opt["output"]
 
 # Ensure output directory exists
 output_dir <- dirname(output_file)
