@@ -8,7 +8,7 @@
 # Load necessary modules
 # Ensure R and necessary packages (tidyverse, MASS) are available
 module load r r/4.3.1 # Or your specific R version/module
-
+module load python
 
 # Run Snakemake using the specific Snakefile_boxCox
 # Executes the 'all' rule by default

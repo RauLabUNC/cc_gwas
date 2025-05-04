@@ -21,11 +21,11 @@ opt <- parse_args(OptionParser(option_list = option_list))
 #         "output" = "data/processed/phenotypes/boxCoxTest/boxcox_individual_Ctrl.csv")
 
 # Read the input phenotype file
-phenotypes <- read.csv(opt["input"])
+phenotypes <- read.csv(opt$input)
 
 # Filter the data based on the drug treatment
-if (!is.null(opt["drug"])) {
-  phenotypes <- phenotypes |> filter(Drug == opt["drug"])
+if (!is.null(opt$drug)) {
+  phenotypes <- phenotypes |> filter(Drug == opt$drug)
 }
 
 # List columns with measured or extrapolated phenotypes
@@ -45,7 +45,7 @@ pheno_processed <- phenotypes %>%
 # --- Normalization ---
 
 # Extract normalization method from command-line arguments
-normalization_method <- opt["normalization"]
+normalization_method <- opt$normalization
 
 if (normalization_method == "zscore") {
   pheno_processed <- pheno_processed %>%
@@ -92,7 +92,7 @@ if (normalization_method == "zscore") {
    } 
 
 # --- Aggregation ---
-aggregation_method <- opt["aggregation"]
+aggregation_method <- opt$aggregation
 
 # --- Aggregation ---
 if (aggregation_method == "mean") {
@@ -108,7 +108,7 @@ pheno_processed <- pheno_processed %>%
 # --- Save Output ---
 
 # Extract output file path from command-line arguments
-output_file <- opt["output"]
+output_file <- opt$output
 
 # Ensure output directory exists
 output_dir <- dirname(output_file)

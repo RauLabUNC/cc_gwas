@@ -6,37 +6,35 @@ library(zoo)       # For rollapply
 library(miqtl)     # For genome.plotter.whole
 library(data.table) # For first() / last()
 
-traits <- c("BW.day.28", "HR.28", "Lung", "THW.by.BW.0","IVSd.28", "LV.Mass.Corrected.28" , "LV.Mass.Corrected.0")
 drugs <- c("Ctrl", "Iso")
 
+# List all files in the directory ending with .rds
+all_files <- list.files( "data/processed/ropscan/", pattern = "\\.rds$")
+
+# Define regex pattern to capture phenotype and condition (Ctrl or Iso)
+# looks for pattern: anything_anything_PHENOTYPE_CONDITION.rds
+pattern <- "^.*?_.*?_(.*?)_(Ctrl|Iso)\\.rds$"
+
+# Extract phenotype and condition using the pattern
+# str_match returns a matrix: [,1] is full match, [,2] is phenotype, [,3] is condition
+matches <- str_match(all_files, pattern)
+
+# Get unique phenotypes where condition is Ctrl (column 3 of matches)
+traits <- unique(matches[!is.na(matches[, 3]), 2])
+
 boxcox <- c()
-zscore <- c()
 for(trait in traits){
   for(drug in drugs){
-    boxcox[[trait]][[drug]] <- readRDS(paste0("data/processed/ropscan/boxcox_individual_", 
-                                              trait, "_", drug, ".rds"))
-    zscore[[trait]][[drug]] <- readRDS(paste0("data/processed/ropscan/zscore_individual_", 
-                                              trait, "_", drug, ".rds"))
-  }
+      boxcox[[trait]][[drug]] <- readRDS(paste0("data/processed/ropscan/boxcox_individual_", 
+                                                trait, "_", drug, ".rds"))
+  } 
 }
 
 thresh.b <- c()
-thresh.z <- c()
 for(trait in traits){
   for(drug in drugs){
-    perms <- readRDS(paste0("data/processed/scan_thresholds/boxcox_individual_", 
-                   trait, "_", drug, "_perm.rds"))
+    thresh.b[[trait]][[drug]] <- "3.3"
     
-    thresh.b[[trait]][[drug]] <- get.gev.thresholds(
-                                    threshold.scans = perms, 
-                                    percentile = 0.90, use.lod = T)
-    
-    perms <- readRDS(paste0("data/processed/scan_thresholds/zscore_individual_", 
-                            trait, "_", drug, "_perm.rds"))
-    
-    thresh.z[[trait]][[drug]] <- get.gev.thresholds(
-                                    threshold.scans = perms, 
-                                    percentile = 0.90, use.lod = T)
   }
 }
 
@@ -44,9 +42,7 @@ for(trait in traits){
 
 # --- Output Directories ---
 sig_region_output_dir <- "results/sig_regions"
-genome_plot_output_dir <- "results/genome_plots"
 dir.create(sig_region_output_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(genome_plot_output_dir, recursive = TRUE, showWarnings = FALSE)
 
 # --- Master List to Store Significant Region Results ---
 all_sig_regions_list <- list()
@@ -62,44 +58,17 @@ rolling_avg <- function(x, n = 5) {
 }
 
 
-# --- Iterate Through Normalizations, Traits, and Drugs ---
+# --- Iterate Through Traits and Drugs ---
 
 # Combine scan and threshold lists for easier iteration
-scan_data <- list(boxcox = boxcox, zscore = zscore)
-threshold_data <- list(boxcox = thresh.b, zscore = thresh.z)
-norm_types <- names(scan_data)
-
-for (norm_method in norm_types) {
-  print(paste("--- Processing Normalization:", norm_method, "---"))
-  
-  current_scans <- scan_data[[norm_method]]
-  current_thresholds <- threshold_data[[norm_method]]
-  
   for (trait in traits) {
     print(paste("  Processing Trait:", trait))
-    
     for (drug_status in drugs) {
-      print(paste("    Processing Drug Status:", drug_status))
-      
       # --- Get Scan and Threshold Data ---
-      scan <- current_scans[[trait]][[drug_status]]
-      threshold_values <- current_thresholds[[trait]][[drug_status]] # This should be the threshold value(s)
+      scan <- boxcox[[trait]][[drug_status]]
+      threshold <- thresh.b[[trait]][[drug_status]] |> as.numeric()# This should be the threshold value(s)
       
-      # Check if scan or threshold data is missing/invalid
-      if (is.null(scan) || is.null(threshold_values) || length(scan$LOD) == 0 || !is.numeric(threshold_values) || length(threshold_values) == 0) {
-        warning(paste("Skipping:", norm_method, trait, drug_status, "- Missing or invalid scan/threshold data."))
-        next 
-      }
-      
-      threshold <- threshold_values[1] # Take the first value as the threshold
-      if (!is.numeric(threshold) || is.na(threshold)) {
-        warning(paste("Skipping:", norm_method, trait, drug_status, "- Invalid threshold value:", threshold))
-        next
-      }
-      
-      print(paste("      Using LOD Threshold:", round(threshold, 3)))
-      
-      # --- 1. Find Significant Regions (Adapting user's logic) ---
+      # --- 1. Find Significant Regions  ---
       
       # Mark significant markers
       is_sig_marker <- scan$LOD > threshold
@@ -143,6 +112,7 @@ for (norm_method in norm_types) {
           summarise(
             chr = data.table::first(chr),
             peak_pos = pos[which.max(LOD)],
+            Peak_SNP_ID = loci[which.max(LOD)],
             max_lod = max(LOD, na.rm = TRUE),
             start_sig_pos = min(pos, na.rm = TRUE), # Start of significant block
             end_sig_pos = max(pos, na.rm = TRUE),   # End of significant block
@@ -185,14 +155,13 @@ for (norm_method in norm_types) {
         sig_regions_summary <- peak_info %>%
           inner_join(bounds_df, by = "block") %>%
           mutate(trait = trait,
-                 drug = drug_status,
-                 norm = norm_method) %>%
-          dplyr::select(norm, trait, drug, block, chr, 
+                 drug = drug_status) %>%
+          dplyr::select(trait, drug, block, chr, Peak_SNP_ID,
                  upper_pos_lod_drop, peak_pos, lower_pos_lod_drop, 
                  max_lod) # Reorder/select final columns
         
         # Add to the master list
-        all_sig_regions_list[[paste(norm_method, trait, drug_status, sep="_")]] <- sig_regions_summary
+        all_sig_regions_list[[paste(trait, drug_status, sep="_")]] <- sig_regions_summary
         
         print(paste("      Found", nrow(sig_regions_summary), "significant region(s)."))
         
@@ -200,37 +169,9 @@ for (norm_method in norm_types) {
         print("      No significant regions found above threshold.")
       }
       
-      # --- 2. Generate Genome Plot ---
-      plot_filename <- file.path(genome_plot_output_dir, paste0(norm_method, "_", trait, "_", drug_status, "_scan.png"))
-      print(paste("      Generating plot:", plot_filename))
-      
-      png(file = plot_filename, width = 8, height = 4, units = "in", res = 300)
-      tryCatch({
-        # Use the threshold value directly
-        miqtl::genome.plotter.whole(scan.list = list(ScanResult = scan), 
-                                    hard.thresholds = threshold,
-                                    use.lod = T) # Pass the numeric threshold
-        title(main = paste(norm_method, trait, drug_status)) # Add title
-      }, error = function(e) {
-        warning(paste("Could not generate plot for", norm_method, trait, drug_status, ":", e$message))
-        # Create a blank plot with error message if plotting fails
-        plot(1, type="n", axes=FALSE, xlab="", ylab="")
-        text(1, 1, paste("Plotting Error for:", trait, drug_status, "\n", e$message), cex=0.8)
-      })
-      dev.off()
-      
     } # End drug loop
   } # End trait loop
-} # End norm loop
-
 # --- Save Combined Significant Regions ---
-if (length(all_sig_regions_list) > 0) {
-  final_sig_regions_df <- bind_rows(all_sig_regions_list)
-  output_csv_path <- file.path(sig_region_output_dir, "all_significant_regions_summary.csv")
-  print(paste("Saving combined significant regions summary to:", output_csv_path))
-  write.csv(final_sig_regions_df, output_csv_path, row.names = FALSE)
-  saveRDS(scan_data, file = "results/sig_regions/scan_data.rds")
-  saveRDS(threshold_data, file = "results/sig_regions/threshold_data.rds")
-} else {
-  print("No significant regions found across all analyses to save.")
-}
+final_sig_regions_df <- bind_rows(all_sig_regions_list)
+output_csv_path <- file.path("data/processed/joinLoci/trait_qtl/miQTL/", "all_significant_regions_summary.csv")
+write.csv(final_sig_regions_df, output_csv_path, row.names = FALSE)
