@@ -33,7 +33,9 @@ for(trait in traits){
 thresh.b <- c()
 for(trait in traits){
   for(drug in drugs){
-    thresh.b[[trait]][[drug]] <- "3.3"
+    thresh.b[[trait]][[drug]] <- readRDS(
+                                  paste0("data/processed/scan_thresholds/boxcox_individual_", 
+                                                           trait, "_", drug, "_threshold.rds"))
     
   }
 }
@@ -106,6 +108,8 @@ rolling_avg <- function(x, n = 5) {
         # Calculate rolling average LOD for the whole scan first
         sig_df$rolling_avg_LOD <- rolling_avg(sig_df$LOD, n = 5) # Adjust n if needed
         
+        
+        
         # Calculate peak properties within each block
         peak_info <- sig_blocks_df %>%
           group_by(block) %>%
@@ -113,6 +117,7 @@ rolling_avg <- function(x, n = 5) {
             chr = data.table::first(chr),
             peak_pos = pos[which.max(LOD)],
             Peak_SNP_ID = loci[which.max(LOD)],
+            lead_strain = names(which.max(abs(scan$allele.effects[,Peak_SNP_ID]))),
             max_lod = max(LOD, na.rm = TRUE),
             start_sig_pos = min(pos, na.rm = TRUE), # Start of significant block
             end_sig_pos = max(pos, na.rm = TRUE),   # End of significant block
@@ -156,7 +161,7 @@ rolling_avg <- function(x, n = 5) {
           inner_join(bounds_df, by = "block") %>%
           mutate(trait = trait,
                  drug = drug_status) %>%
-          dplyr::select(trait, drug, block, chr, Peak_SNP_ID,
+          dplyr::select(trait, drug, block, chr, Peak_SNP_ID, lead_strain,
                  upper_pos_lod_drop, peak_pos, lower_pos_lod_drop, 
                  max_lod) # Reorder/select final columns
         

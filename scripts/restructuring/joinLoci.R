@@ -6,9 +6,7 @@
 # (SNP-based) analyses for both trait QTLs and eQTLs. It processes
 # and formats these results into two harmonized tables: one for trait loci
 # and one for eQTLs, saving them as CSV files.
-#
-# Author: Gemini
-# Date: 2025-05-03
+
 # =============================================================================
 
 # --- 1. Load Libraries ---
@@ -28,8 +26,7 @@ miqtl_trait_loci_raw <- read.csv(miqtl_trait_loci_file)
 
 ## Make reform to unify
 miqlt_trait_loci_formatted <- miqtl_trait_loci_raw |> 
-  mutate(Locus_ID = NA,
-         Method = "miQTL",
+  mutate(Method = "miQTL",
          Analysis_Type = "TraitQTL",
          Dependent_Variable = trait,
          Treatment = drug,
@@ -38,11 +35,15 @@ miqlt_trait_loci_formatted <- miqtl_trait_loci_raw |>
          Locus_End_bp = lower_pos_lod_drop*10^6,
          Peak_SNP_ID = Peak_SNP_ID,
          Peak_SNP_pos_bp = peak_pos*10^6,
+         Lead_Strain = lead_strain,
          Peak_Significance_Value = max_lod,
          Significance_Metric = "LOD",
-         Significance_Threshold = NA) |>
-  dplyr::select(Locus_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
-                Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Peak_SNP_pos_bp, Peak_Significance_Value,
+         Significance_Threshold = NA,
+         Locus_ID = paste0(Chr, ":", Locus_Start_bp, "-",Locus_End_bp,"_", 
+                           Analysis_Type, "_",Dependent_Variable, "_", Treatment),
+         Position_ID = paste0(Chr, ":", Locus_Start_bp, "-",Locus_End_bp)) |>
+  dplyr::select(Locus_ID, Position_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
+                Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Lead_Strain, Peak_SNP_pos_bp, Peak_Significance_Value,
                 Significance_Metric, Significance_Threshold)
 
 
@@ -61,8 +62,7 @@ pyLMM_trait_iso_formatted <- pyLMM_trait_iso |>
     names_to = "Dependent_Variable",
     values_to = "Peak_Significance_Value"
   ) |> 
-  mutate(Locus_ID = NA,
-         Method = "PyLMM",
+  mutate(Method = "PyLMM",
          Analysis_Type = "TraitQTL",
          Dependent_Variable = Dependent_Variable,
          Chr = Chr,
@@ -73,7 +73,7 @@ pyLMM_trait_iso_formatted <- pyLMM_trait_iso |>
          Peak_SNP_pos_bp = Pos_mm39,
          Significance_Metric = "P-value",
          Significance_Threshold = NA) |> 
-  dplyr::select(Locus_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
+  dplyr::select(Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
                 Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Peak_SNP_pos_bp, Peak_Significance_Value,
                 Significance_Metric, Significance_Threshold)
 
@@ -83,8 +83,7 @@ pyLMM_trait_ctrl_formatted <- pyLMM_trait_ctrl |>
     names_to = "Dependent_Variable",
     values_to = "Peak_Significance_Value"
   ) |> 
-  mutate(Locus_ID = NA,
-         Method = "PyLMM",
+  mutate(Method = "PyLMM",
          Analysis_Type = "TraitQTL",
          Dependent_Variable = Dependent_Variable,
          Chr = Chr,
@@ -95,13 +94,22 @@ pyLMM_trait_ctrl_formatted <- pyLMM_trait_ctrl |>
          Peak_SNP_pos_bp = Pos_mm39,
          Significance_Metric = "P-value",
          Significance_Threshold = NA) |> 
-  dplyr::select(Locus_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
+  dplyr::select(Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
                 Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Peak_SNP_pos_bp, Peak_Significance_Value,
                 Significance_Metric, Significance_Threshold)
 
 
 # Bind the two tables
-pyLMM_trait_formatted <- rbind(pyLMM_trait_ctrl_formatted, pyLMM_trait_iso_formatted)
+pyLMM_trait_formatted <- rbind(pyLMM_trait_ctrl_formatted, pyLMM_trait_iso_formatted) |> 
+  mutate(Locus_ID = paste0(Chr, ":", Locus_Start_bp, "-",Locus_End_bp,"_", 
+                      Analysis_Type, "_",Dependent_Variable, "_", Treatment),
+         Position_ID = paste0(Chr, ":", Locus_Start_bp, "-",Locus_End_bp),
+         Lead_Strain = NA
+         
+  ) |> 
+  dplyr::select(Locus_ID, Position_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
+                Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Lead_Strain, Peak_SNP_pos_bp, Peak_Significance_Value,
+                Significance_Metric, Significance_Threshold)
 
 
 #### eQTL data ####
@@ -110,8 +118,7 @@ miqtl_eqtl <- file.path(input_dir,"miQTL", "miQTL_output.csv") |> read.csv(row.n
 
 ## Make reform to unify
 miqlt_eqt_loci_formatted <- miqtl_eqtl |> 
-  mutate(Locus_ID = NA,
-         Method = "miQTL",
+  mutate(Method = "miQTL",
          Analysis_Type = "eQTL",
          Dependent_Variable = trait,
          Treatment = treatment,
@@ -120,10 +127,14 @@ miqlt_eqt_loci_formatted <- miqtl_eqtl |>
          Locus_End_bp = as.numeric(stringr::str_extract(chr_region, "[0-9]+$")),
          Peak_SNP_ID = lead.snp,
          Peak_SNP_pos_bp = NA,
+         Lead_Strain = lead.strain,
          Peak_Significance_Value = lead.snp.LOD,
          Significance_Metric = "LOD",
-         Significance_Threshold = NA) |>
-  dplyr::select(Locus_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
+         Significance_Threshold = NA,
+         Locus_ID = paste0(Chr, ":", Locus_Start_bp, "-",Locus_End_bp,"_", 
+                           Analysis_Type, "_",Dependent_Variable, "_", Treatment),
+         Position_ID = paste0(Chr, ":", Locus_Start_bp, "-",Locus_End_bp)) |>
+  dplyr::select(Locus_ID,Position_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
                 Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Peak_SNP_pos_bp, Peak_Significance_Value,
                 Significance_Metric, Significance_Threshold)
 
@@ -159,11 +170,12 @@ pyLMM_eqtl_formatted <- pyLMM_eqtl |>
 
 
 # --- Combine eQTL ---
-harmonized_loci <- bind_rows(miqlt_trait_loci_formatted, pyLMM_trait_formatted, 
-                             miqlt_eqt_loci_formatted, pyLMM_eqtl_formatted)
+trait_loci <- bind_rows(miqlt_trait_loci_formatted, pyLMM_trait_formatted)
 
-# Add Locus ID
-harmonized_loci <- harmonized_loci |> mutate(Locus_ID = paste0(Chr, ":", Locus_Start_bp, "-",Locus_End_bp,"_", Analysis_Type, "_",Dependent_Variable, "_", Treatment))
+exp_loci <- bind_rows(miqlt_eqt_loci_formatted, pyLMM_eqtl_formatted)
 
 ## Save output
-write.csv(harmonized_loci, "data/processed/joinLoci/relational_tables/loci.csv", row.names = F)
+write.csv(trait_loci, "data/processed/joinLoci/relational_tables/traitLoci.csv", row.names = F)
+
+## Save output
+write.csv(exp_loci, "data/processed/joinLoci/relational_tables/expLoci.csv", row.names = F)
