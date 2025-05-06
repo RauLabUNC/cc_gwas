@@ -67,8 +67,8 @@ pyLMM_trait_iso_formatted <- pyLMM_trait_iso |>
          Dependent_Variable = Dependent_Variable,
          Chr = Chr,
          Treatment = "Iso",
-         Locus_Start_bp = Pos_mm39 - 5*10^5,
-         Locus_End_bp = Pos_mm39 + 5*10^5,
+         Locus_Start_bp = Pos_mm39 - 10^6,
+         Locus_End_bp = Pos_mm39 + 10^6,
          Peak_SNP_ID = Name,
          Peak_SNP_pos_bp = Pos_mm39,
          Significance_Metric = "P-value",
@@ -117,7 +117,7 @@ input_dir <- "data/processed/joinLoci/eqtl"
 miqtl_eqtl <- file.path(input_dir,"miQTL", "miQTL_output.csv") |> read.csv(row.names = 1)
 
 ## Make reform to unify
-miqlt_eqt_loci_formatted <- miqtl_eqtl |> 
+miqtl_eqtl_loci_formatted <- miqtl_eqtl |> 
   mutate(Method = "miQTL",
          Analysis_Type = "eQTL",
          Dependent_Variable = trait,
@@ -132,11 +132,12 @@ miqlt_eqt_loci_formatted <- miqtl_eqtl |>
          Significance_Metric = "LOD",
          Significance_Threshold = NA,
          Locus_ID = paste0(Chr, ":", Locus_Start_bp, "-",Locus_End_bp,"_", 
-                           Analysis_Type, "_",Dependent_Variable, "_", Treatment),
+                           Method, "_ ",Analysis_Type, "_",Dependent_Variable, "_", Treatment),
          Position_ID = paste0(Chr, ":", Locus_Start_bp, "-",Locus_End_bp)) |>
-  dplyr::select(Locus_ID,Position_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
-                Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Peak_SNP_pos_bp, Peak_Significance_Value,
+  dplyr::select(Locus_ID, Position_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
+                Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Lead_Strain, Peak_SNP_pos_bp, Peak_Significance_Value,
                 Significance_Metric, Significance_Threshold)
+
 
 
 ## Make reform to unify
@@ -152,27 +153,31 @@ pyLMM_eqtl_formatted <- pyLMM_eqtl |>
     names_to = "Dependent_Variable",
     values_to = "Peak_Significance_Value"
   ) |> 
-  mutate(Locus_ID = NA,
-         Method = "PyLMM",
+  mutate(Method = "PyLMM",
          Analysis_Type = "eQTL",
          Dependent_Variable = Dependent_Variable,
          Chr = factor(Chr),
          Treatment = factor("Ctrl"),
-         Locus_Start_bp = Pos_mm39 - 5*10^5,
-         Locus_End_bp = Pos_mm39 + 5*10^5,
+         Locus_Start_bp = Pos_mm39 - 10^6,
+         Locus_End_bp = Pos_mm39 + 10^6,
          Peak_SNP_ID = Name,
          Peak_SNP_pos_bp = Pos_mm39,
+         Lead_Strain = NA,
          Significance_Metric = "P-value",
-         Significance_Threshold = NA) |> 
-  dplyr::select(Locus_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
-                Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Peak_SNP_pos_bp, Peak_Significance_Value,
+         Significance_Threshold = NA,
+         Locus_ID = paste0(Chr, ":", Locus_Start_bp, "-",Locus_End_bp,"_", 
+                           Method, "_ ",Analysis_Type, "_",Dependent_Variable, "_", Treatment),
+         Position_ID = paste0(Chr, ":", Locus_Start_bp, "-",Locus_End_bp)) |> 
+  dplyr::select(Locus_ID, Position_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
+                Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Lead_Strain, Peak_SNP_pos_bp, Peak_Significance_Value,
                 Significance_Metric, Significance_Threshold)
+
 
 
 # --- Combine eQTL ---
 trait_loci <- bind_rows(miqlt_trait_loci_formatted, pyLMM_trait_formatted)
 
-exp_loci <- bind_rows(miqlt_eqt_loci_formatted, pyLMM_eqtl_formatted)
+exp_loci <- bind_rows(miqtl_eqtl_loci_formatted, pyLMM_eqtl_formatted)
 
 ## Save output
 write.csv(trait_loci, "data/processed/joinLoci/relational_tables/traitLoci.csv", row.names = F)

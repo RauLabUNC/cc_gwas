@@ -3,22 +3,21 @@ library(dplyr)
 library(biomaRt)
 
 # 1) Read & prep loci table ---------------------------------------------------
-loci_dt <- fread(
-  "data/processed/joinLoci/relational_tables/loci.csv",
+pos_dt <- fread(
+  "data/processed/joinLoci/relational_tables/pos.csv",
   colClasses = list(
-    character = "Locus_ID",
-    character = "Chr",
-    integer   = c("Locus_Start_bp","Locus_End_bp")
+    character = "pos_id",
+    character = "chr",
+    integer   = c("start_bp","end_bp")
   )
-)
-
-loci_deDup <- loci_dt |> group_by(Chr, Locus_Start_bp, Locus_End_bp) |> slice_head(n = 1)  |> as.data.table()
+) |> 
+  drop_na()
 # rename for foverlaps
-setnames(loci_deDup,
-         old = c("Chr","Locus_Start_bp","Locus_End_bp"),
+setnames(pos_dt,
+         old = c("chr","start_bp","end_bp"),
          new = c("chromosome_name","start","end"))
 # set key for overlap
-setkey(loci_deDup, chromosome_name, start, end)
+setkey(pos_dt, chromosome_name, start, end)
 
 # 2) Fetch genes & filter ------------------------------------------------------
 mart <- useEnsembl(
@@ -51,7 +50,7 @@ setkey(genes_dt, chromosome_name, start, end)
 # foverlaps requires the first table to have start/end
 overlap_dt <- foverlaps(
   genes_dt,
-  loci_deDup,
+  pos_dt,
   nomatch = 0L
 )
 
@@ -61,9 +60,7 @@ locus_list_dt <- overlap_dt[
   , .(
     Gene_Symbols   = list(unique(gene_symbol)),
     Ensembl_IDs    = list(unique(ensembl_gene_id))
-  ), by = Locus_ID
+  ), by = pos_id
 ]
-
-locus_list_dt[ , locus_range := tstrsplit(Locus_ID, "_", keep=1) ]
 
 saveRDS(locus_list_dt, "data/processed/joinLoci/relational_tables/genesInLoci.rds")

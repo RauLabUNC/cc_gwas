@@ -33,31 +33,16 @@ for(trait in traits){
 thresh.b <- c()
 for(trait in traits){
   for(drug in drugs){
-    thresh.b[[trait]][[drug]] <- readRDS(
-                                  paste0("data/processed/scan_thresholds/boxcox_individual_", 
-                                                           trait, "_", drug, "_threshold.rds"))
-    
+    perm <- readRDS(paste0("data/processed/scan_thresholds/boxcox_individual_", 
+             trait, "_", drug, "_perm.rds"))
+    thresh.b[[trait]][[drug]] <- miqtl::get.gev.thresholds(
+                                    perm ,use.lod = T, percentile = 0.9)
   }
 }
 
-
-
-# --- Output Directories ---
-sig_region_output_dir <- "results/sig_regions"
-dir.create(sig_region_output_dir, recursive = TRUE, showWarnings = FALSE)
 
 # --- Master List to Store Significant Region Results ---
 all_sig_regions_list <- list()
-
-# --- Define the rolling average function ---
-rolling_avg <- function(x, n = 5) {
-  # Ensure there are enough non-NA values for the window
-  if (sum(!is.na(x)) < (2*n + 1)) {
-    warning("Not enough non-NA values for rolling average window size.")
-    return(rep(NA_real_, length(x)))
-  }
-  zoo::rollapply(x, width = 2*n + 1, FUN = mean, na.rm = TRUE, fill = NA, align = "center", partial = TRUE) # Use partial=TRUE to handle edges
-}
 
 
 # --- Iterate Through Traits and Drugs ---
@@ -104,12 +89,7 @@ rolling_avg <- function(x, n = 5) {
       sig_blocks_df <- sig_df %>% filter(!is.na(block))
       
       if (nrow(sig_blocks_df) > 0) {
-        
-        # Calculate rolling average LOD for the whole scan first
-        sig_df$rolling_avg_LOD <- rolling_avg(sig_df$LOD, n = 5) # Adjust n if needed
-        
-        
-        
+
         # Calculate peak properties within each block
         peak_info <- sig_blocks_df %>%
           group_by(block) %>%
@@ -139,12 +119,12 @@ rolling_avg <- function(x, n = 5) {
           
           # Find upper bound (scan upstream from start of sig block)
           upper_candidates <- chr_df %>% 
-            filter(pos <= current_start_sig, rolling_avg_LOD < current_threshold)
+            filter(pos <= current_start_sig, LOD < current_threshold)
           upper_bound_pos <- if(nrow(upper_candidates) > 0) max(upper_candidates$pos, na.rm=TRUE) else min(chr_df$pos, na.rm=TRUE) # Default to chr start if no marker below threshold found
           
           # Find lower bound (scan downstream from end of sig block)
           lower_candidates <- chr_df %>% 
-            filter(pos >= current_end_sig, rolling_avg_LOD < current_threshold)
+            filter(pos >= current_end_sig, LOD < current_threshold)
           lower_bound_pos <- if(nrow(lower_candidates) > 0) min(lower_candidates$pos, na.rm=TRUE) else max(chr_df$pos, na.rm=TRUE) # Default to chr end if no marker below threshold found
           
           bounds_list[[i]] <- tibble(
@@ -180,3 +160,6 @@ rolling_avg <- function(x, n = 5) {
 final_sig_regions_df <- bind_rows(all_sig_regions_list)
 output_csv_path <- file.path("data/processed/joinLoci/trait_qtl/miQTL/", "all_significant_regions_summary.csv")
 write.csv(final_sig_regions_df, output_csv_path, row.names = FALSE)
+
+saveRDS(boxcox,"results/sig_regions/scan_data.rds")
+saveRDS(thresh.b,"results/sig_regions/threshold_data.rds")

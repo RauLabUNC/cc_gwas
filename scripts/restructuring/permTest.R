@@ -53,7 +53,8 @@ permuted_scans <- run.threshold.scans(
 
 permute_threshold <- get.gev.thresholds(
   threshold.scans = permuted_scans, 
-  percentile = 0.90
+  percentile = 0.90,
+  use.lod = T
 )
 
 # --- Save Outputs ---

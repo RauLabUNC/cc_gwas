@@ -7,10 +7,7 @@ library(TxDb.Mmusculus.UCSC.mm39.knownGene)
 library(org.Mm.eg.db)
 
 # Constants
-COLORS <- list(
-  boxcox = c(Sig = "#1f78b4", nonSig = "#a6cee3"),
-  zscore = c(Sig = "#ff7f00", nonSig = "#fdbf6f")
-)
+COLORS <- c(Sig = "#1f78b4", nonSig = "#a6cee3")
 PLOT_DIMS <- list(page_width = 7, page_height = 6.5, res = 300)
 PLOT_PARAMS <- list(x = 3.25, plot_width = 6, plot_height = 1.5, plot_y = 0.5)
 GENE_DIMS <- list(height = 2, y_offset = 0.5, label_offset = 0.1)
@@ -25,8 +22,8 @@ compute_padding <- function(start, end, min_pad = 5e5, pad_frac = 0.1) {
 
 # Safe loaders using purrr
 get_scan_safe <- purrr::safely(
-  function(norm, trait, drug) {
-    scan_raw <- scan_data[[norm]][[trait]][[drug]]
+  function(trait, drug) {
+    scan_raw <- scan_data[[trait]][[drug]]
     tibble(
       marker = names(scan_raw$LOD),
       chr    = as.character(scan_raw$chr),
@@ -37,18 +34,18 @@ get_scan_safe <- purrr::safely(
   }
 )
 get_thresh_safe <- purrr::safely(
-  function(norm, trait, drug) {
-    threshold_data[[norm]][[trait]][[drug]]
+  function(trait, drug) {
+    threshold_data[[trait]][[drug]]
   }
 )
 
 # Load Data
-sig_regions    <- read_csv("results/sig_regions/all_significant_regions_summary.csv") %>%
+sig_regions    <- read_csv("data/processed/joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv") %>%
   mutate(
     across(c(upper_pos_lod_drop, peak_pos, lower_pos_lod_drop, max_lod), as.numeric),
     chr = as.character(chr)
   ) %>%
-  drop_na(upper_pos_lod_drop, lower_pos_lod_drop, chr, trait, norm, drug)
+  drop_na(upper_pos_lod_drop, lower_pos_lod_drop, chr, trait, drug)
 scan_data      <- readRDS("results/sig_regions/scan_data.rds")
 threshold_data <- readRDS("results/sig_regions/threshold_data.rds")
 
@@ -56,8 +53,8 @@ threshold_data <- readRDS("results/sig_regions/threshold_data.rds")
 # pyLMM results
 pyResults <- c()
 
-pyResults[["Ctrl"]] <- read.csv("data/processed/christophGWAS/Ctrl_pvals.csv")
-pyResults[["Iso"]] <- read.csv("data/processed/christophGWAS/Iso_pvals.csv")
+pyResults[["Ctrl"]] <- read.csv("data/processed/joinLoci/trait_qtl/PyLMM/Ctrl_pvals.csv")
+pyResults[["Iso"]] <- read.csv("data/processed/joinLoci/trait_qtl/PyLMM/Iso_pvals.csv")
 
 
 # Genome assembly
@@ -75,7 +72,7 @@ output_dir <- "results/miQTL_pyLMM"
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Plotting function for original LOD curves
-add_lod_curve <- function(params_genome, scan_df, norm, threshold, type = "orig") {
+add_lod_curve <- function(params_genome, scan_df, threshold, type = "orig") {
   df <- scan_df %>%
     transmute(
       chrom = paste0("chr", chr),
@@ -95,8 +92,8 @@ add_lod_curve <- function(params_genome, scan_df, norm, threshold, type = "orig"
     just           = c("center", "top"),
     xfield         = "pos",
     yfield         = "p",
-    fill           = COLORS[[norm]]["nonSig"],
-    sigCol         = COLORS[[norm]]["Sig"],
+    fill           = COLORS["nonSig"],
+    sigCol         = COLORS["Sig"],
     sigLine        = TRUE,
     baseline       = TRUE,
     yscale_reverse = FALSE,
@@ -105,8 +102,15 @@ add_lod_curve <- function(params_genome, scan_df, norm, threshold, type = "orig"
 }
 # Main loop over significant regions
 sig_regions %>%
-  purrr::pwalk(function(chr, norm, trait, drug, peak_pos, lower_pos_lod_drop, upper_pos_lod_drop, ...) {
+  purrr::pwalk(function(chr, trait, drug, peak_pos, lower_pos_lod_drop, upper_pos_lod_drop, ...) {
     # Chromosome string and bounds
+    #chr <- sig_regions[[1, "chr"]]
+    #trait <- sig_regions[[1, "trait"]]
+    #drug <- sig_regions[[1, "drug"]]
+    #peak_pos <- sig_regions[[1, "peak_pos"]]
+    #lower_pos_lod_drop <- sig_regions[[1, "lower_pos_lod_drop"]]
+    #upper_pos_lod_drop <- sig_regions[[1, "upper_pos_lod_drop"]]
+    
     chr_str   <- if (!startsWith(chr, "chr")) paste0("chr", chr) else chr
     bounds_bp <- c(lower_pos_lod_drop * 1e6, upper_pos_lod_drop * 1e6)
     padded    <- compute_padding(min(bounds_bp), max(bounds_bp))
@@ -123,11 +127,10 @@ sig_regions %>%
     
     # Alternative conditions
     alt_drug <- if (drug == "Ctrl") "Iso" else "Ctrl"
-    alt_norm <- if (norm  == "boxcox") "zscore" else "boxcox"
     
     # Retrieve original scan & thresholds
-    orig_scan     <- get_scan_safe(norm, trait, drug)$result
-    thresh_orig   <- get_thresh_safe(norm, trait, drug)$result
+    scan_orig <- get_scan_safe(trait, drug)$result
+    thresh_orig   <- get_thresh_safe(trait, drug)$result
     
     # Define y-axis limits for main plot
     lods_main <- orig_scan$lod
@@ -139,7 +142,7 @@ sig_regions %>%
     # Prepare output file
     outfile <- file.path(
       output_dir,
-      paste0("locus_", norm, "_", trait, "_", drug,
+      paste0("locus_", trait, "_", drug,
              "_chr", chr, "_peak", round(peak_pos, 2), "Mb.png")
     )
     
@@ -157,7 +160,8 @@ sig_regions %>%
     )
     
     # Main LOD curve
-    main_plot <- add_lod_curve(params_genome, orig_scan, norm, thresh_orig, type = "orig")
+    
+    main_plot <- add_lod_curve(params_genome, scan_orig, thresh_orig, type = "orig")
     annoYaxis(
       plot         = main_plot,
       at           = pretty(plot_ylim),
@@ -259,7 +263,7 @@ sig_regions %>%
     
     # Title and legend
     plotText(
-      label         = paste("QTL:", trait, "(", norm, "/", drug, ") -",
+      label         = paste("QTL:", trait, "(",drug, ") -",
                             chr_str, "Peak:", round(peak_pos, 2), "Mb"),
       x             = PLOT_PARAMS$x,
       y             = 0.05,
@@ -270,7 +274,7 @@ sig_regions %>%
     )
     plotLegend(
       legend        = c("Original LOD", "pyResults"),
-      fill          = c(COLORS[[norm]]["Sig"], "black"),
+      fill          = c(COLORS["Sig"], "black"),
       border        = FALSE,
       x             = PLOT_PARAMS$x,
       y             = 0,
