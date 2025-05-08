@@ -8,8 +8,8 @@ library(org.Mm.eg.db)
 
 # Constants
 COLORS <- c(Sig = "#1f78b4", nonSig = "#a6cee3")
-PLOT_DIMS <- list(page_width = 7, page_height = 6.5, res = 300)
-PLOT_PARAMS <- list(x = 3.25, plot_width = 6, plot_height = 1.5, plot_y = 0.5)
+PLOT_DIMS <- list(page_width = 9, page_height = 6.5, res = 300)
+PLOT_PARAMS <- list(x = 4.25, plot_width = 8, plot_height = 1.5, plot_y = 0.5)
 GENE_DIMS <- list(height = 2, y_offset = 0.5, label_offset = 0.1)
 MIN_YLIM <- 5
 
@@ -72,7 +72,7 @@ output_dir <- "results/miQTL_pyLMM"
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Plotting function for original LOD curves
-add_lod_curve <- function(params_genome, scan_df, threshold, type = "orig") {
+add_lod_curve <- function(params_genome, scan_df, threshold, type = "orig", plot_ylim) {
   df <- scan_df %>%
     transmute(
       chrom = paste0("chr", chr),
@@ -104,12 +104,12 @@ add_lod_curve <- function(params_genome, scan_df, threshold, type = "orig") {
 sig_regions %>%
   purrr::pwalk(function(chr, trait, drug, peak_pos, lower_pos_lod_drop, upper_pos_lod_drop, ...) {
     # Chromosome string and bounds
-    #chr <- sig_regions[[1, "chr"]]
-    #trait <- sig_regions[[1, "trait"]]
-    #drug <- sig_regions[[1, "drug"]]
-    #peak_pos <- sig_regions[[1, "peak_pos"]]
-    #lower_pos_lod_drop <- sig_regions[[1, "lower_pos_lod_drop"]]
-    #upper_pos_lod_drop <- sig_regions[[1, "upper_pos_lod_drop"]]
+    #chr <- sig_regions[[5, "chr"]]
+    #trait <- sig_regions[[5, "trait"]]
+    #drug <- sig_regions[[5, "drug"]]
+    #peak_pos <- sig_regions[[5, "peak_pos"]]
+    #lower_pos_lod_drop <- sig_regions[[5, "lower_pos_lod_drop"]]
+    #upper_pos_lod_drop <- sig_regions[[5, "upper_pos_lod_drop"]]
     
     chr_str   <- if (!startsWith(chr, "chr")) paste0("chr", chr) else chr
     bounds_bp <- c(lower_pos_lod_drop * 1e6, upper_pos_lod_drop * 1e6)
@@ -133,10 +133,10 @@ sig_regions %>%
     thresh_orig   <- get_thresh_safe(trait, drug)$result
     
     # Define y-axis limits for main plot
-    lods_main <- orig_scan$lod
+    lods_main <- scan_orig$lod
     plot_ylim <- c(
       0,
-      max(MIN_YLIM, ceiling(max(lods_main, thresh_orig, na.rm = TRUE)+0.5))
+      max(MIN_YLIM, ceiling(max(lods_main, thresh_orig, na.rm = TRUE))+1)
     )
     
     # Prepare output file
@@ -161,7 +161,7 @@ sig_regions %>%
     
     # Main LOD curve
     
-    main_plot <- add_lod_curve(params_genome, scan_orig, thresh_orig, type = "orig")
+    main_plot <- add_lod_curve(params_genome, scan_orig, thresh_orig, type = "orig", plot_ylim)
     annoYaxis(
       plot         = main_plot,
       at           = pretty(plot_ylim),
@@ -170,7 +170,7 @@ sig_regions %>%
       main         = FALSE
     )
     # Annotations & highlights
-    plotText(label   = paste0("LOD, miQTL — ", drug),
+    plotText(label   = paste0("LOD, miQTL"),
              x       = 2 * PLOT_PARAMS$x + 0.1,
              y       = PLOT_PARAMS$plot_y + PLOT_PARAMS$plot_height / 2,
              rot     = 270,
@@ -215,7 +215,7 @@ sig_regions %>%
       fontsize     = 8,
       main         = FALSE
     )
-    plotText(label   = paste0("-log10(p), pyLMM — ", drug),
+    plotText(label   = paste0("-log10(p), pyLMM"),
              x       = 2 * PLOT_PARAMS$x + 0.1,
              y       = PLOT_PARAMS$plot_y + 1.5*PLOT_PARAMS$plot_height + 0.2,
              rot     = 270,
@@ -246,7 +246,7 @@ sig_regions %>%
       width         = PLOT_PARAMS$plot_width,
       height        = GENE_DIMS$height,
       stroke        = 1,
-      fontsize      = 10,
+      fontsize      = 7,
       just          = c("center", "top"),
       default.units = "inches"
     )
@@ -256,7 +256,7 @@ sig_regions %>%
       x           = PLOT_PARAMS$x,
       y           =  PLOT_PARAMS$plot_y + 2 * PLOT_PARAMS$plot_height + GENE_DIMS$y_offset + GENE_DIMS$height,
       scale       = "Mb",
-      fontsize    = 8,
+      fontsize    = 10,
       just        = c("center", "top"),
       default.units= "inches"
     )
@@ -273,10 +273,10 @@ sig_regions %>%
       default.units = "inches"
     )
     plotLegend(
-      legend        = c("Original LOD", "pyResults"),
+      legend        = c("miQTL (dated haplotypes)", "pyLMM (updated markers)"),
       fill          = c(COLORS["Sig"], "black"),
       border        = FALSE,
-      x             = PLOT_PARAMS$x,
+      x             = PLOT_PARAMS$x-0.5*1,
       y             = 0,
       width         = 1,
       height        = 0.75,

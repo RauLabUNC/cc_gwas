@@ -158,8 +158,19 @@ all_sig_regions_list <- list()
   } # End trait loop
 # --- Save Combined Significant Regions ---
 final_sig_regions_df <- bind_rows(all_sig_regions_list)
+
+# Keep the loci with the widest bounds if multiple overlap
+merged_regions <- final_sig_regions_df %>% 
+  arrange(trait, drug, chr, upper_pos_lod_drop, desc(lower_pos_lod_drop)) %>%   # sort: leftmost first, widest first
+  group_by(trait, drug, chr) %>% 
+  mutate(max_end_seen = lag(cummax(lower_pos_lod_drop), default = -Inf),
+       keep         = lower_pos_lod_drop > max_end_seen) %>%      # nested = FALSE; outermost = TRUE
+  ungroup() %>% 
+  filter(keep) %>% 
+  dplyr::select(-max_end_seen, -keep)
+
 output_csv_path <- file.path("data/processed/joinLoci/trait_qtl/miQTL/", "all_significant_regions_summary.csv")
-write.csv(final_sig_regions_df, output_csv_path, row.names = FALSE)
+write.csv(merged_regions, output_csv_path, row.names = FALSE)
 
 saveRDS(boxcox,"results/sig_regions/scan_data.rds")
 saveRDS(thresh.b,"results/sig_regions/threshold_data.rds")
