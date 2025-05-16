@@ -21,7 +21,7 @@ paths  <- list(
   orthology     = fs::path(base, "orthology.csv"),
   associations  = fs::path(base, "associations.csv"),
   trait_loci    = fs::path(base, "traitLoci.csv"),
-  exp_loci_cis  = fs::path(base, "expLoci_cisflag.csv"),
+  cis_eQTL_genes= "data/processed/joinLoci/eqtl/PyLMM/VSTdata_Ctrl_and_Iso_2M_CisFlags_250508.csv",
   mouse_pheno   = fs::path(base, "mouseGenePhenotypes.csv"),
   nrvm_counts   = "data/processed/joinLoci/nrvms/bulk_gene.csv",
   nrvm_meta     = "data/processed/joinLoci/nrvms/phenotypes.csv"
@@ -36,15 +36,17 @@ message_b <- function(...) cat("\n▸", ..., "\n")
 genes_mouse   <- read_dt(paths$genes_mouse)
 ortho_mouse2h <- read_dt(paths$orthology)
 trait_loci    <- read_dt(paths$trait_loci)
-exp_cis       <- read_dt(paths$exp_loci_cis)   # already flagged cis/trans
 associations  <- read_dt(paths$associations)
-mouse_pheno  <- read_dt(paths$mouse_pheno)  
+mouse_pheno   <- read_dt(paths$mouse_pheno)  
+exp_cis       <- read.csv(paths$cis_eQTL_genes, row.names = 1) |> 
+  dplyr::select(
+    mouse_gene_symbol = Gene,
+    Ctrl_cis_flag,
+    Iso_cis_flag
+  )  # already flagged cis/trans
 # === 4.  Filter to protein‑coding genes with human orthologues ===============
 genes_pc      <- genes_mouse[gene_biotype == "protein_coding"]
 genes_pc_h    <- merge(genes_pc, ortho_mouse2h, by = "mouse_ensembl_id")[human_gene_symbol != ""]
-
-# Keep only genes present in cis eQTLs (dependent variable list) ---------------
-genes_pc_h_cis <- genes_pc_h[mouse_gene_symbol %in% exp_cis$Dependent_Variable]
 
 # === 5.  Interval overlap: genes vs. miQTL trait loci =========================
 # Prepare intervals
@@ -130,12 +132,16 @@ top_patho <- top_patho[, .(
 ), by = .(symbol, human_ensembl_id)] |> 
   left_join(ortho_mouse2h)
 
+
+
 merged <- geneSummary |> 
   left_join(top_patho, by = "mouse_ensembl_id") |> 
   dplyr::select(-symbol, -human_gene_symbol, -human_ensembl_id) |> 
   dplyr::select(mouse_gene_symbol, n_trait_drug, avgenes_cpm,
                 trait_drug, disease, mouse_ensembl_id) |> 
-  left_join(mouse_pheno_listed)
+  left_join(mouse_pheno_listed) |> 
+  left_join(exp_cis)
+
 # === 9.  Write output =========================================================
 out_dir <- "results/joinLoci/geneTables"
 fs::dir_create(out_dir)
