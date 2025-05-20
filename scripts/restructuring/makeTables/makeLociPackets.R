@@ -64,6 +64,9 @@ merged_gene_info <- fread("results/joinLoci/geneTables/multTrait_cis-eQTL_nrvmEx
 muNoSplice <- fread("data/processed/joinLoci/relational_tables/ccVariants/Gene_Mutations_CC_WT_NoSplice_OnlyDeleterious_3_31_25.csv")
 muDriving  <- fread("data/processed/joinLoci/relational_tables/ccVariants/Driving_Mutations_by_SNP_Filtered.csv")
 
+# === Bulk RNAseq, raw and VST ===
+rna_info <- fread("data/processed/joinLoci/bulk_exp/5d_VST_Info_250429.csv", drop = 1)
+
 # === get the genome assembly
 
 # Genome assembly
@@ -114,8 +117,8 @@ generate_locus_zoom_plot <- function(locus_info, # A row from sig_regions or a c
   current_chr <- locus_info$chr
   
   # Ensure positions are in base pairs for plotgardener
-  plot_start_bp <- floor(locus_info$upper_pos_lod_drop * 1e6) - 1e6 # Add padding
-  plot_end_bp   <- ceiling(locus_info$lower_pos_lod_drop * 1e6) + 1e6 # Add padding
+  plot_start_bp <- floor(locus_info$upper_pos_lod_drop * 1e6) - 5*1e5 # Add padding
+  plot_end_bp   <- ceiling(locus_info$lower_pos_lod_drop * 1e6) + 5*1e5 # Add padding
   bounds_bp <- c(locus_info$upper_pos_lod_drop  * 1e6, locus_info$lower_pos_lod_drop * 1e6)
   
   # Ensure start is not negative
@@ -272,7 +275,8 @@ generate_locus_zoom_plot <- function(locus_info, # A row from sig_regions or a c
   names(plot_data_list) <- founder_strains
   
   # Get the max abs haplotype effects to set y axis 
-  max_allele_effect <- plot_data_list |> rbindlist() |> pull(score) |> abs() |> max() |> ceiling()
+  max_allele_effect <- plot_data_list |> rbindlist() |> pull(score) |> abs() |> max() 
+  max_allele_effect <- round(max_allele_effect * 1.1, digits = 2)
   
   strain_colors <- rep(c("#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02", "#A6761D", "#666666"), length.out = num_strains)
   signalPlots <- c()
@@ -455,6 +459,14 @@ generate_gene_info_excel <- function(genes_in_locus_dt,
                                      full_human_assoc_data = associations,
                                      orthology_data = ortho_mouse2h) {
   
+  genes_in_locus_dt = genes_in_current_locus
+  loci_info_df = loci  # Pass the entire loci dataframe 
+  output_dir = current_output_dir 
+  full_mouse_pheno_data = mouse_pheno
+  full_human_assoc_data = associations
+  orthology_data = ortho_mouse2h
+  
+  #orthology_data = ortho_mouse2h
   if (nrow(genes_in_locus_dt) == 0) {
     message("No genes found in the specified locus for Excel generation.")
     return(NULL)
@@ -493,9 +505,41 @@ generate_gene_info_excel <- function(genes_in_locus_dt,
   setnames(gene_coords, "mouse_ensembl_id", "Mouse Ensembl ID")
   main_genes_table <- merge(main_genes_table, gene_coords, by = "Mouse Ensembl ID", all.x = TRUE)
   
+  measured_genes <- main_genes_table |> filter(`Mouse Gene Symbol` %in% colnames(rna_info))
+  # Get in-house bulk expression
+  if(nrow(measured_genes) == 0){
+    return(NA)
+  }
+  # Calculate mean expression by Drug and Sex
+  means <- rna_info %>%
+    dplyr::select(Drug, Sex, measured_genes$`Mouse Gene Symbol`) |> 
+    group_by(Drug, Sex) %>%
+    summarize(across(measured_genes$`Mouse Gene Symbol`, \(x) mean(x, na.rm = TRUE)), .groups = "drop")
+  
+  # Reshape to get Drug_Sex combinations as columns
+  means_long <- means %>%
+    pivot_longer(
+      cols = -c(Drug, Sex),
+      names_to = "Gene",
+      values_to = "Mean"
+    ) %>%
+    mutate(Mean = round(Mean, digits = 1)) |> 
+    unite("Drug_Sex", Drug, Sex, sep = "_") %>%
+    pivot_wider(
+      id_cols = Gene,
+      names_from = Drug_Sex,
+      values_from = Mean,
+      names_prefix = "Ave_Exp_"
+    ) 
+  
+  # Join with measured_genes
+  main_genes_table <- main_genes_table %>%
+    left_join(means_long, by = c("Mouse Gene Symbol" = "Gene"))
+  
   # Set initial column order
   initial_cols <- c("Mouse Gene Symbol", "Mouse Ensembl ID", "chr", "start_bp", "end_bp", 
-                    "Avg NRVM CPM (Ctrl)", "# Traits Associated (miQTL)")
+                    "Avg NRVM CPM (Ctrl)", "Ave_Exp_Ctrl_F", "Ave_Exp_Ctrl_M",
+                    "Ave_Exp_Iso_F", "Ave_Exp_Iso_M" ,"# Traits Associated (miQTL)")
   
   # --- Add locus presence columns (T/F) for each locus in the cluster ---
   # Group loci by trait and drug for unique identifiers
@@ -543,31 +587,33 @@ generate_gene_info_excel <- function(genes_in_locus_dt,
     conditionalFormatting(wb, "AllGenesInCluster", 
                           cols = col_idx, 
                           rows = 1:(nrow(main_genes_table) + 1), # +1 for header
-                          rule = "==Yes", 
+                          rule = "=Yes", 
                           style = createStyle(bgFill = "#90EE90")) # Light green for TRUE
   }
   
   # Add sheets for individual genes with phenotype/disease data
+  # Create single sheet for all mouse phenotypes
+  all_mouse_pheno <- data.table()
+  # Create single sheet for all human diseases
+  all_human_disease <- data.table()
+  
   for (idx in 1:nrow(main_genes_table)) {
     current_gene_symbol <- main_genes_table$`Mouse Gene Symbol`[idx]
     current_mouse_ensembl_id <- main_genes_table$`Mouse Ensembl ID`[idx]
     
-    # Check for and add Mouse Phenotypes sheet
+    # Mouse phenotypes - add to consolidated table
     gene_mouse_pheno_data <- full_mouse_pheno_data[mouse_gene_symbol == current_gene_symbol, 
-                                                   .(mouse_gene_symbol, 
+                                                   .(Gene = mouse_gene_symbol, # Add gene column
                                                      OntologyTermID = `OntologyAnnotation.ontologyTerm.identifier`, 
                                                      OntologyTermName = `OntologyAnnotation.ontologyTerm.name`,
                                                      PubMedID = `OntologyAnnotation.evidence.publications.pubMedId`,
                                                      Description = `OntologyAnnotation.evidence.comments.description`)]
     
     if (nrow(gene_mouse_pheno_data) > 0) {
-      sheet_name_mouse <- substr(paste0(current_gene_symbol, "_MousePheno"), 1, 31) # Excel sheet name limit
-      addWorksheet(wb, sheet_name_mouse)
-      writeData(wb, sheet_name_mouse, gene_mouse_pheno_data)
+      all_mouse_pheno <- rbindlist(list(all_mouse_pheno, gene_mouse_pheno_data), fill = TRUE)
     }
     
-    # Check for and add Human Disease Associations sheet
-    # First, get human ortholog info
+    # Human disease associations - add to consolidated table
     human_ortho_info <- orthology_data[mouse_ensembl_id == current_mouse_ensembl_id, ]
     
     if (nrow(human_ortho_info) > 0 && human_ortho_info$human_ensembl_id[1] != "") {
@@ -575,18 +621,32 @@ generate_gene_info_excel <- function(genes_in_locus_dt,
       current_human_symbol <- human_ortho_info$human_gene_symbol[1]
       
       gene_human_disease_data <- full_human_assoc_data[human_ensembl_id == current_human_ensembl_id, 
-                                                       .(human_ensembl_id, 
+                                                       .(MouseGene = current_gene_symbol, # Add mouse gene column
+                                                         human_ensembl_id, 
                                                          human_gene_symbol = symbol, 
                                                          disease_id, 
                                                          disease_name, 
                                                          association_score)]
       
       if (nrow(gene_human_disease_data) > 0) {
-        sheet_name_human <- substr(paste0(current_gene_symbol, "_HumanDisease"), 1, 31)
-        addWorksheet(wb, sheet_name_human)
-        writeData(wb, sheet_name_human, gene_human_disease_data)
+        all_human_disease <- rbindlist(list(all_human_disease, gene_human_disease_data), fill = TRUE)
       }
     }
+  }
+  
+  # Add the consolidated sheets only if they have data
+  if (nrow(all_mouse_pheno) > 0) {
+    addWorksheet(wb, "AllMousePhenotypes")
+    writeData(wb, "AllMousePhenotypes", all_mouse_pheno)
+    # Add autofilter to make it easier to view by gene
+    addFilter(wb, "AllMousePhenotypes", rows = 1, cols = 1:ncol(all_mouse_pheno))
+  }
+  
+  if (nrow(all_human_disease) > 0) {
+    addWorksheet(wb, "AllHumanDiseases")
+    writeData(wb, "AllHumanDiseases", all_human_disease)
+    # Add autofilter
+    addFilter(wb, "AllHumanDiseases", rows = 1, cols = 1:ncol(all_human_disease))
   }
   
   # --- Save Workbook ---
@@ -624,7 +684,7 @@ generate_founder_mutation_table <- function(founder_snps_in_locus_dt, # data.tab
     # Add columns for consequence, overlapping gene if you implement that
   )]
   
-  table_file_name <- file.path(output_dir, paste0("founder_snp_table_chr", locus_info$chr, "_", round(locus_info$peak_pos,2), "Mb.csv"))
+  table_file_name <- file.path(output_dir, paste0("founder_snp_table_", locus_info, ".csv"))
   message("Generating founder SNP table: ", table_file_name)
   fwrite(founder_snp_table, table_file_name)
   return(table_file_name)
@@ -664,8 +724,7 @@ group_to_process <- unique(sig_regions$locus_cluster)#[[2]]
 base_output_dir <- "results/qtl_packets" 
 if (!dir.exists(base_output_dir)) dir.create(base_output_dir, recursive = TRUE)
 
-for (i in seq_along(group_to_process)) {
-  i <- 2
+for (i in seq_along(group_to_process[3:14])) {
   loci <- sig_regions |> filter(locus_cluster %in%   group_to_process[i])
   # Create a specific directory for this locus packet
   locus_packet_name <- paste0("locus_chr", loci$chr[[1]],
@@ -690,10 +749,13 @@ for (i in seq_along(group_to_process)) {
                                                            locus_start_bp,
                                                            locus_end_bp)
   
-  top_genes_in_locus <- data.frame(gene = merged_gene_info |> 
+  top_genes <- merged_gene_info |> 
     filter(mouse_gene_symbol %in% genes_in_current_locus$mouse_gene_symbol) |> 
-    pull(mouse_gene_symbol),
-  color = "#e34a33")
+    pull(mouse_gene_symbol)
+  if(length(top_genes)< 1){
+    top_genes <- NA
+  }
+  top_genes_in_locus <- data.frame(gene = top_genes,color = "#e34a33")
   
   # Make the overlaps dataframe to plot ranges of loci within loci cluster
   overlaps <- loci |> 
@@ -724,13 +786,13 @@ for (i in seq_along(group_to_process)) {
   }
   
   # --- C. Generate Phenotype Distribution Plot ---
-  for(j in 1:nrow(loci)){
-    current_locus_info <- loci[j,]
-  pheno_dist_plot_file <- generate_phenotype_dist_plot(current_locus_info$trait,
-                                                       current_locus_info$drug,
-                                                       pheno_data = all_pheno_data,
-                                                       output_dir = current_output_dir)
-  }
+  #for(j in 1:nrow(loci)){
+  #  current_locus_info <- loci[j,]
+  #pheno_dist_plot_file <- generate_phenotype_dist_plot(current_locus_info$trait,
+  #                                                     current_locus_info$drug,
+  #                                                     pheno_data = all_pheno_data,
+  #                                                     output_dir = current_output_dir)
+  #}
   # --- D. to generate Excel file
   # --- D. Generate the combined gene info Excel file for all loci in the cluster ---
   # Pass the entire loci dataframe instead of a single locus
@@ -743,11 +805,12 @@ for (i in seq_along(group_to_process)) {
     orthology_data = ortho_mouse2h
   )
   # --- E. Generate Founder Mutation Table for SNPs in Locus ---
+  if(sum(is.na(gene_info_excel_file)) != 1){
   founder_snp_table_file <- generate_founder_mutation_table(founder_snps_current_locus,
-                                                            current_locus_info,
+                                                            locus_packet_name,
                                                             current_output_dir)
   
-
+  
   # Define heart-related terms for human disease associations
   human_heart_terms <- c(
     # Basic cardiac terms
@@ -905,8 +968,7 @@ for (i in seq_along(group_to_process)) {
     "\n\n## 3. Genes associated with both human and mouse cardiac traits (", both_count, "):",
     "\n        ", format_both(human_mouse_genes),
     "\n\n# NOTES",
-    "\n- All 'Associated Traits (Drug)' in the original data are cardiac-related QTL mappings",
-    "\n- LV-related measurements refer to left ventricular parameters",
+    "\n- All 'Associated Traits (Drug)' in the original data are our own miQTL mappings",
     "\n- See cardiac_genes_summary.csv for a structured version of this data"
   )
   
@@ -924,7 +986,7 @@ for (i in seq_along(group_to_process)) {
         Chromosome = human_only_genes$chr,
         Start_Position = human_only_genes$start_bp,
         End_Position = human_only_genes$end_bp,
-        Expression_Level = human_only_genes$`Avg NRVM CPM (Ctrl)`,
+        NRVM_CPM= human_only_genes$`Avg NRVM CPM (Ctrl)`,
         stringsAsFactors = FALSE
       )
     },
@@ -938,7 +1000,7 @@ for (i in seq_along(group_to_process)) {
         Chromosome = mouse_only_genes$chr,
         Start_Position = mouse_only_genes$start_bp,
         End_Position = mouse_only_genes$end_bp,
-        Expression_Level = mouse_only_genes$`Avg NRVM CPM (Ctrl)`,
+        NRVM_CPM = mouse_only_genes$`Avg NRVM CPM (Ctrl)`,
         stringsAsFactors = FALSE
       )
     },
@@ -952,7 +1014,7 @@ for (i in seq_along(group_to_process)) {
         Chromosome = human_mouse_genes$chr,
         Start_Position = human_mouse_genes$start_bp,
         End_Position = human_mouse_genes$end_bp,
-        Expression_Level = human_mouse_genes$`Avg NRVM CPM (Ctrl)`,
+        NRVM_CPM = human_mouse_genes$`Avg NRVM CPM (Ctrl)`,
         stringsAsFactors = FALSE
       )
     }
@@ -1000,6 +1062,20 @@ for (i in seq_along(group_to_process)) {
     # Save the workbook
     saveWorkbook(wb, file.path(current_output_dir, "cardiac_genes_summary.xlsx"), overwrite = TRUE)
   }
+  }else{
+    # Create the summary text with more detailed contextual information
+    summary_text <- paste( # this prints s
+      "# CARDIAC GENE SUMMARY\n",
+      "Summary for Locus:", locus_packet_name,
+      "\nAssociated Trait(s):", 
+      "\n    Ctrl: ", paste(loci |> filter(drug == "Ctrl") |>  pull(trait), collapse= ", "),
+      "\n    Iso:", paste(loci |> filter(drug == "Iso") |>  pull(trait), collapse= ", "),    
+      "\nGenomic Region (chr", current_locus_info$chr, "): ", min(loci$upper_pos_lod_drop), "-", max(loci$lower_pos_lod_drop), " (mm39)",
+      "\nWARNING: No compelling genes found. Loci may be erroneous.")
+    # Write to README_summary.txt
+    writeLines(summary_text, file.path(current_output_dir, "README_summary.txt"))
+    
+      }
 }
 
 message("\nAll selected loci processed. Packets generated in: ", base_output_dir)
