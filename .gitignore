@@ -1,0 +1,48 @@
+# Ignore everything by default
+/*
+
+# Top-level files to track
+!CLAUDE.md
+!README.md
+!.gitignore
+
+# Scripts folder
+!scripts/
+!scripts/**
+
+# Exclude logs within scripts
+scripts/**/*.log
+scripts/**/*.out
+scripts/**/*.err
+
+# R and Python artifacts
+*.Rhistory
+*.RData
+*.Rproj.user
+__pycache__/
+*.pyc
+*.pyo
+
+# System files
+.DS_Store
+.Rproj.user/
+.Rprofile
+.Renviron
+
+# Large data files
+*.rds
+*.csv
+*.tsv
+*.xlsx
+*.png
+*.pdf
+*.zip
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# SLURM logs
+.slurmlogs/
+slurm-*.out

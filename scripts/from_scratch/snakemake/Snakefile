@@ -1,0 +1,269 @@
+# --- Minimal Test Configuration ---
+# Testing with 2 traits, both treatments, reduced permutations
+
+QTL_TRAITS = ["BW.day.21", "LV.Mass.Corrected.21"]
+NORMS = ["boxcox"]
+AGGS = ["individual"]
+DRUGS = ["Ctrl", "Iso"]
+
+# Input paths
+PHENO_DIR = "data/processed/phenotypes"  # Using existing preprocessed files
+GENOME_CACHE = "data/raw/genomes/haplotype_cache_cc_083024"  # Will symlink to original
+
+# Script paths
+ROPSCAN_SCRIPT = "scripts/from_scratch/snakemake/01_ropScan.R"
+PERMTEST_SCRIPT = "scripts/from_scratch/snakemake/02_permTest.R"
+
+# Script paths for downstream analysis
+DETECT_LOCI_SCRIPT = "scripts/from_scratch/03_detectSigLoci.R"
+JOIN_LOCI_SCRIPT = "scripts/from_scratch/04_joinLoci.R"
+JOIN_POSITION_SCRIPT = "scripts/from_scratch/10_joinPositionID.R"
+MERGE_LOCI_GENES_SCRIPT = "scripts/from_scratch/11_mergeLociDetectGenes.R"
+SPLIT_GENES_SCRIPT = "scripts/from_scratch/12_splitGenesToSpecies.R"
+GET_PATHOGENICITY_SCRIPT = "scripts/from_scratch/20_getPathogenicity.R"
+GET_MOUSE_PHENOTYPES_SCRIPT = "scripts/from_scratch/21_getMouseGenePhenotypes.R"
+MULT_TRAIT_CIS_SCRIPT = "scripts/from_scratch/13_multTrait_cis-eQTL_nrvmExp.R"  # Modified to remove PyLMM dependency
+MAKE_LOCI_PACKETS_SCRIPT = "scripts/from_scratch/22_makeLociPackets.R"
+
+# --- Target Rule ---
+rule all:
+    input:
+        # Complete pipeline outputs - final QTL packets
+        "results/qtl_packets/all_loci.zip"
+        # This is the final output from makeLociPackets.R
+
+# --- Rule: Run ROP Scan ---
+rule run_ropscan:
+    input:
+        script=ROPSCAN_SCRIPT,
+        processed_pheno=PHENO_DIR + "/{norm}_{agg}_{drug}.csv"
+    output:
+        scan="data/processed/ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds"
+    params:
+        norm=lambda wildcards: wildcards.norm,
+        agg=lambda wildcards: wildcards.agg,
+        qtl_trait=lambda wildcards: wildcards.qtl_trait,
+        drug=lambda wildcards: wildcards.drug
+    resources:
+        mem_mb=4000,
+        time="01:00:00"
+    shell:
+        """
+        Rscript {input.script} \
+            --input {input.processed_pheno} \
+            --output {output.scan} \
+            --normalization {params.norm} \
+            --aggregation {params.agg} \
+            --qtl_trait {params.qtl_trait} \
+            --drug {params.drug}
+        """
+
+# --- Rule: Permutation Analysis (20 permutations only) ---
+rule run_permutation:
+    input:
+        script=PERMTEST_SCRIPT,
+        scan="data/processed/ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds",
+        pheno=PHENO_DIR + "/{norm}_{agg}_{drug}.csv"
+    output:
+        threshold="data/processed/scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_threshold.rds",
+        permuted_scan="data/processed/scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_perm.rds"
+    params:
+        qtl_trait=lambda wildcards: wildcards.qtl_trait,
+        drug=lambda wildcards: wildcards.drug
+    resources:
+        mem_mb=6000,
+        time="12:00:00"  # Reduced time for only 20 permutations
+    shell:
+        """
+        Rscript {input.script} \
+            --input_scan {input.scan} \
+            --input_pheno {input.pheno} \
+            --output_threshold {output.threshold} \
+            --output_scan {output.permuted_scan} \
+            --qtl_trait {params.qtl_trait} \
+            --drug {params.drug}
+        """
+
+# --- Rule: Detect Significant Loci ---
+# This rule aggregates all scan results and thresholds to identify significant QTL regions
+rule detect_significant_loci:
+    input:
+        # Collect all threshold files
+        thresholds=expand("data/processed/scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_threshold.rds",
+                         norm=NORMS, agg=AGGS, qtl_trait=QTL_TRAITS, drug=DRUGS),
+        # Collect all scan files  
+        scans=expand("data/processed/ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds",
+                    norm=NORMS, agg=AGGS, qtl_trait=QTL_TRAITS, drug=DRUGS)
+    output:
+        summary="data/processed/joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv",
+        scan_data="results/sig_regions/scan_data.rds",
+        threshold_data="results/sig_regions/threshold_data.rds"
+    params:
+        scan_dir="data/processed/ropscan",
+        threshold_dir="data/processed/scan_thresholds"
+    resources:
+        mem_mb=16000,
+        time="00:30:00"
+    shell:
+        """
+        Rscript {DETECT_LOCI_SCRIPT}
+        """
+
+# --- Rule: Join Loci ---
+# Formats QTL results into standardized relational tables
+rule join_loci:
+    input:
+        script=JOIN_LOCI_SCRIPT,
+        trait_qtl="data/processed/joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv"
+        # Note: Script also expects data/processed/joinLoci/eqtl/miQTL/miQTL_output.csv
+        # which must be pre-generated from expression QTL analysis
+    output:
+        trait_loci="data/processed/joinLoci/relational_tables/traitLoci.csv",
+        exp_loci="data/processed/joinLoci/relational_tables/expLoci.csv"
+    resources:
+        mem_mb=8000,
+        time="00:30:00"
+    shell:
+        """
+        mkdir -p data/processed/joinLoci/relational_tables
+        Rscript {input.script}
+        """
+
+# --- Rule: Join Position IDs ---
+# Consolidates unique positional IDs from QTL tables
+rule join_position_id:
+    input:
+        script=JOIN_POSITION_SCRIPT,
+        trait_loci="data/processed/joinLoci/relational_tables/traitLoci.csv",
+        exp_loci="data/processed/joinLoci/relational_tables/expLoci.csv"
+    output:
+        pos="data/processed/joinLoci/relational_tables/pos.csv"
+    resources:
+        mem_mb=4000,
+        time="00:15:00"
+    shell:
+        """
+        Rscript {input.script}
+        """
+
+# --- Rule: Merge Loci and Detect Genes ---
+# Identifies genes within QTL loci using biomaRt
+rule merge_loci_detect_genes:
+    input:
+        script=MERGE_LOCI_GENES_SCRIPT,
+        pos="data/processed/joinLoci/relational_tables/pos.csv"
+    output:
+        genes_in_loci="data/processed/joinLoci/relational_tables/genesInLoci.rds"
+    resources:
+        mem_mb=8000,
+        time="01:00:00"
+    shell:
+        """
+        Rscript {input.script}
+        """
+
+# --- Rule: Get Pathogenicity ---
+# Fetches gene information including orthologs and disease associations
+rule get_pathogenicity:
+    input:
+        script=GET_PATHOGENICITY_SCRIPT,
+        genes_in_loci="data/processed/joinLoci/relational_tables/genesInLoci.rds"
+    output:
+        gene_info="data/processed/joinLoci/relational_tables/gene_info.csv",
+        associations="data/processed/joinLoci/relational_tables/associations.csv",
+        constraints="data/processed/joinLoci/relational_tables/constraints.csv",
+        tractability="data/processed/joinLoci/relational_tables/tractability.csv"
+    resources:
+        mem_mb=12000,
+        time="02:00:00"
+    shell:
+        """
+        Rscript {input.script}
+        """
+
+# --- Rule: Split Genes to Species ---
+# Splits gene_info into species-specific tables
+rule split_genes_to_species:
+    input:
+        script=SPLIT_GENES_SCRIPT,
+        gene_info="data/processed/joinLoci/relational_tables/gene_info.csv"
+    output:
+        genes_mouse="data/processed/joinLoci/relational_tables/genes_mouse.csv",
+        orthology="data/processed/joinLoci/relational_tables/orthology.csv"
+    resources:
+        mem_mb=4000,
+        time="00:15:00"
+    shell:
+        """
+        Rscript {input.script}
+        """
+
+# --- Rule: Generate Multi-Trait cis-eQTL Gene List ---
+# Creates gene list for mouse phenotype queries
+rule generate_mult_trait_cis:
+    input:
+        script=MULT_TRAIT_CIS_SCRIPT,
+        genes_mouse="data/processed/joinLoci/relational_tables/genes_mouse.csv",
+        orthology="data/processed/joinLoci/relational_tables/orthology.csv",
+        associations="data/processed/joinLoci/relational_tables/associations.csv",
+        trait_loci="data/processed/joinLoci/relational_tables/traitLoci.csv",
+        # Mouse phenotypes will be generated later and merged separately
+        # These files are symlinked from original project:
+        nrvm_counts="data/processed/joinLoci/nrvms/bulk_gene.csv",
+        nrvm_meta="data/processed/joinLoci/nrvms/phenotypes.csv"
+    output:
+        gene_list="results/joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv"
+    resources:
+        mem_mb=8000,
+        time="00:30:00"
+    shell:
+        """
+        mkdir -p results/joinLoci/geneTables
+        Rscript {input.script}
+        """
+
+# --- Rule: Get Mouse Gene Phenotypes ---
+# Queries MouseMine for phenotype annotations
+rule get_mouse_phenotypes:
+    input:
+        script=GET_MOUSE_PHENOTYPES_SCRIPT,
+        gene_list="results/joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv"
+    output:
+        phenotypes="data/processed/joinLoci/relational_tables/mouseGenePhenotypes.csv"
+    resources:
+        mem_mb=8000,
+        time="01:00:00"
+    shell:
+        """
+        Rscript {input.script}
+        """
+
+# --- Rule: Make Loci Packets ---
+# Final rule that creates QTL packets with plots and Excel summaries
+rule make_loci_packets:
+    input:
+        script="scripts/from_scratch/22_makeLociPackets.R",
+        # All required relational tables
+        genes_mouse="data/processed/joinLoci/relational_tables/genes_mouse.csv",
+        orthology="data/processed/joinLoci/relational_tables/orthology.csv",
+        associations="data/processed/joinLoci/relational_tables/associations.csv",
+        trait_loci="data/processed/joinLoci/relational_tables/traitLoci.csv",
+        mouse_pheno="data/processed/joinLoci/relational_tables/mouseGenePhenotypes.csv",
+        gene_list="results/joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv",
+        # Scan results
+        scan_data="results/sig_regions/scan_data.rds",
+        threshold_data="results/sig_regions/threshold_data.rds",
+        # Bulk expression data (symlinked)
+        vst_info="data/processed/joinLoci/bulk_exp/5d_VST_Info_250429.csv",
+        # NRVM data (symlinked)
+        nrvm_counts="data/processed/joinLoci/nrvms/bulk_gene.csv"
+    output:
+        readme="results/qtl_packets/all_loci.zip"
+    resources:
+        mem_mb=16000,
+        time="02:00:00"
+    shell:
+        """
+        mkdir -p results/qtl_packets
+        Rscript {input.script}
+        """
