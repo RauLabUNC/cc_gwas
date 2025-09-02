@@ -182,6 +182,48 @@ All dependencies are now in a single conda environment:
 - **Log structure**: `.slurmlogs/YYYY-MM-DD/HHMMSS_JOBID/` with organized subdirectories
 - **Job naming**: Cluster jobs named by Snakemake rule for clarity
 
+## Recent Updates (September 2, 2025)
+
+### Test Mode Implementation
+- Added test mode for rapid pipeline validation (5 minutes vs hours)
+- Test mode runs: 1 trait, 1 treatment, chromosome 1 only, 5 permutations
+- Activated via `SNAKEMAKE_MODE=test` environment variable
+- Separate output directories with `test_` prefix
+
+### Resource Tracking System
+Complete resource monitoring system implemented:
+- **Automatic tracking**: `/usr/bin/time -v` captures detailed metrics per job
+- **SLURM integration**: Job accounting data collection
+- **HTML reports**: Visualizations of resource usage and bottlenecks
+- **Benchmark files**: Snakemake native benchmarking enabled
+- **Comparison tools**: Scripts to compare requested vs actual resource usage
+
+#### Resource Tracking Scripts
+- `scripts/resource_tracking/submit_with_tracking.sh` - Run pipeline with automatic tracking
+- `scripts/resource_tracking/collect_usage.sh` - Collect SLURM accounting data
+- `scripts/resource_tracking/generate_report.R` - Generate HTML reports with visualizations
+- `scripts/resource_tracking/create_comparison_report.sh` - Compare used vs requested resources
+
+#### Optimized Resource Allocations
+Based on empirical measurements:
+- **Test mode**: 1GB memory, 10 minutes per job
+- **Full mode**: 4-6GB memory, 1-12 hours per job
+- **CPU utilization**: ~78% (efficient single-core usage)
+
+### Log Organization
+Consolidated logging structure:
+```
+.slurmlogs/DATE/RUNID/
+├── tracking.out        # Main pipeline output
+├── snakemake.log      # Snakemake detailed log
+└── jobs/
+    └── RULE/
+        └── WILDCARDS/
+            ├── stdout  # R script output
+            ├── stderr  # R script errors
+            └── time    # Resource usage metrics
+```
+
 ## Known Issues & Solutions
 
 ### Snakemake --cluster Flag Error

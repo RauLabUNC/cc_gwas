@@ -11,7 +11,8 @@ option_list <- list(
   make_option(c("--normalization"), type = "character", help = "Normalization method (e.g., zscore, boxcox)"),
   make_option(c("--aggregation"), type = "character", help = "Aggregation method (e.g., individual, mean)"),
   make_option(c("--qtl_trait"), type = "character", help = "QTL trait to analyze"),
-  make_option(c("--drug"), type = "character", help = "Drug treatment (e.g., Ctrl, Iso)")
+  make_option(c("--drug"), type = "character", help = "Drug treatment (e.g., Ctrl, Iso)"),
+  make_option(c("--mode"), type = "character", default = "full", help = "Run mode: 'full' or 'test' (test runs chr1 only)")
 )
 
 # Parse the arguments
@@ -31,6 +32,15 @@ genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 qtl_trait <- opt$qtl_trait
 print(qtl_trait)
 
+# Set chromosome parameter based on mode
+if (opt$mode == "test") {
+  cat("Running in TEST mode - chromosome 1 only\n")
+  chr_to_scan <- 1
+} else {
+  cat("Running in FULL mode - all chromosomes\n")
+  chr_to_scan <- "all"
+}
+
 # Run genome scan
 miqtl.rop.scan.scaled <- scan.h2lmm.test(
   genomecache = genomecache,
@@ -40,7 +50,8 @@ miqtl.rop.scan.scaled <- scan.h2lmm.test(
   formula = get(qtl_trait) ~ 0 + Sex,  # Incorporate covariates
   use.multi.impute = FALSE,
   return.allele.effects = TRUE,
-  use.fix.par = TRUE
+  use.fix.par = TRUE,
+  chr = chr_to_scan
 )
 
 # --- Save Output ---

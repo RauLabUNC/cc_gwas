@@ -1,10 +1,24 @@
-# --- Minimal Test Configuration ---
-# Testing with 2 traits, both treatments, reduced permutations
+# --- Configuration ---
+# Set MODE to "test" for quick testing or "full" for production
+import os
+MODE = os.environ.get("SNAKEMAKE_MODE", "full")  # Can be set via environment variable
 
-QTL_TRAITS = ["BW.day.21", "LV.Mass.Corrected.21"]
-NORMS = ["boxcox"]
-AGGS = ["individual"]
-DRUGS = ["Ctrl", "Iso"]
+if MODE == "test":
+    # Test mode: single trait, single treatment, chr1 only
+    QTL_TRAITS = ["BW.day.21"]
+    NORMS = ["boxcox"]
+    AGGS = ["individual"]
+    DRUGS = ["Ctrl"]
+    OUTPUT_PREFIX = "test_"
+    print("Running in TEST mode: 1 trait, 1 treatment, chr1 only")
+else:
+    # Full mode: original configuration
+    QTL_TRAITS = ["BW.day.21", "LV.Mass.Corrected.21"]
+    NORMS = ["boxcox"]
+    AGGS = ["individual"]
+    DRUGS = ["Ctrl", "Iso"]
+    OUTPUT_PREFIX = ""
+    print("Running in FULL mode: all traits and treatments")
 
 # Input paths
 PHENO_DIR = "data/processed/phenotypes"  # Using existing preprocessed files
@@ -28,9 +42,11 @@ MAKE_LOCI_PACKETS_SCRIPT = "scripts/from_scratch/22_makeLociPackets.R"
 # --- Target Rule ---
 rule all:
     input:
-        # Complete pipeline outputs - final QTL packets
-        "results/qtl_packets/all_loci.zip"
-        # This is the final output from makeLociPackets.R
+        # For now, stop after permutation testing in test mode
+        expand("data/processed/" + OUTPUT_PREFIX + "scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_threshold.rds",
+               norm=NORMS, agg=AGGS, qtl_trait=QTL_TRAITS, drug=DRUGS) if MODE == "test" else
+        # Complete pipeline outputs - final QTL packets (full mode)
+        "results/" + OUTPUT_PREFIX + "qtl_packets/all_loci.zip"
 
 # --- Rule: Run ROP Scan ---
 rule run_ropscan:
@@ -38,50 +54,76 @@ rule run_ropscan:
         script=ROPSCAN_SCRIPT,
         processed_pheno=PHENO_DIR + "/{norm}_{agg}_{drug}.csv"
     output:
-        scan="data/processed/ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds"
+        scan="data/processed/" + OUTPUT_PREFIX + "ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds"
     params:
         norm=lambda wildcards: wildcards.norm,
         agg=lambda wildcards: wildcards.agg,
         qtl_trait=lambda wildcards: wildcards.qtl_trait,
-        drug=lambda wildcards: wildcards.drug
+        drug=lambda wildcards: wildcards.drug,
+        mode=MODE
+    log:
+        stdout=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_ropscan/{norm}_{agg}_{qtl_trait}_{drug}/stdout",
+        stderr=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_ropscan/{norm}_{agg}_{qtl_trait}_{drug}/stderr",
+        time=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_ropscan/{norm}_{agg}_{qtl_trait}_{drug}/time"
+    benchmark:
+        "bench/run_ropscan/{norm}_{agg}_{qtl_trait}_{drug}.txt"
     resources:
-        mem_mb=4000,
-        time="01:00:00"
+        mem_mb=1000 if MODE == "test" else 4000,
+        time="00:10:00" if MODE == "test" else "01:00:00"
     shell:
         """
+        mkdir -p $(dirname {log.stdout})
+        /usr/bin/time -v -o {log.time} \
         Rscript {input.script} \
             --input {input.processed_pheno} \
             --output {output.scan} \
             --normalization {params.norm} \
             --aggregation {params.agg} \
             --qtl_trait {params.qtl_trait} \
-            --drug {params.drug}
+            --drug {params.drug} \
+            --mode {params.mode} \
+            > {log.stdout} 2> {log.stderr}
+        
+        echo "SLURM_JOB_ID=$SLURM_JOB_ID" >> {log.time} || true
         """
 
 # --- Rule: Permutation Analysis (20 permutations only) ---
 rule run_permutation:
     input:
         script=PERMTEST_SCRIPT,
-        scan="data/processed/ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds",
+        scan="data/processed/" + OUTPUT_PREFIX + "ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds",
         pheno=PHENO_DIR + "/{norm}_{agg}_{drug}.csv"
     output:
-        threshold="data/processed/scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_threshold.rds",
-        permuted_scan="data/processed/scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_perm.rds"
+        threshold="data/processed/" + OUTPUT_PREFIX + "scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_threshold.rds",
+        permuted_scan="data/processed/" + OUTPUT_PREFIX + "scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_perm.rds"
     params:
         qtl_trait=lambda wildcards: wildcards.qtl_trait,
-        drug=lambda wildcards: wildcards.drug
+        drug=lambda wildcards: wildcards.drug,
+        mode=MODE
+    log:
+        stdout=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_permutation/{norm}_{agg}_{qtl_trait}_{drug}/stdout",
+        stderr=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_permutation/{norm}_{agg}_{qtl_trait}_{drug}/stderr",
+        time=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_permutation/{norm}_{agg}_{qtl_trait}_{drug}/time"
+    benchmark:
+        "bench/run_permutation/{norm}_{agg}_{qtl_trait}_{drug}.txt"
     resources:
-        mem_mb=6000,
-        time="12:00:00"  # Reduced time for only 20 permutations
+        mem_mb=1000 if MODE == "test" else 6000,
+        time="00:10:00" if MODE == "test" else "12:00:00"
     shell:
         """
+        mkdir -p $(dirname {log.stdout})
+        /usr/bin/time -v -o {log.time} \
         Rscript {input.script} \
             --input_scan {input.scan} \
             --input_pheno {input.pheno} \
             --output_threshold {output.threshold} \
             --output_scan {output.permuted_scan} \
             --qtl_trait {params.qtl_trait} \
-            --drug {params.drug}
+            --drug {params.drug} \
+            --mode {params.mode} \
+            > {log.stdout} 2> {log.stderr}
+        
+        echo "SLURM_JOB_ID=$SLURM_JOB_ID" >> {log.time} || true
         """
 
 # --- Rule: Detect Significant Loci ---
@@ -89,10 +131,10 @@ rule run_permutation:
 rule detect_significant_loci:
     input:
         # Collect all threshold files
-        thresholds=expand("data/processed/scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_threshold.rds",
+        thresholds=expand("data/processed/" + OUTPUT_PREFIX + "scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_threshold.rds",
                          norm=NORMS, agg=AGGS, qtl_trait=QTL_TRAITS, drug=DRUGS),
         # Collect all scan files  
-        scans=expand("data/processed/ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds",
+        scans=expand("data/processed/" + OUTPUT_PREFIX + "ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds",
                     norm=NORMS, agg=AGGS, qtl_trait=QTL_TRAITS, drug=DRUGS)
     output:
         summary="data/processed/joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv",
@@ -258,7 +300,7 @@ rule make_loci_packets:
         # NRVM data (symlinked)
         nrvm_counts="data/processed/joinLoci/nrvms/bulk_gene.csv"
     output:
-        readme="results/qtl_packets/all_loci.zip"
+        readme="results/" + OUTPUT_PREFIX + "qtl_packets/all_loci.zip"
     resources:
         mem_mb=16000,
         time="02:00:00"

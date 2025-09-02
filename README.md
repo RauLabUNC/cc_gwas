@@ -2,7 +2,38 @@
 
 This is the rebuilt version of the Collaborative Cross miQTL analysis pipeline. The goal is to get everything from the original scattered scripts into a single, reproducible workflow.
 
-## Current Status (Aug 29, 2025)
+## Current Status (September 2, 2025)
+
+### Latest Updates
+- ✅ **Test mode implemented**: 5-minute pipeline validation (chr1 only, 5 permutations)
+- ✅ **Resource tracking system**: Complete monitoring with HTML reports and SLURM integration
+- ✅ **Optimized resource allocation**: Reduced memory from 6GB to 1GB for test jobs
+- ✅ **Git repository initialized**: Connected to GitHub at https://github.com/RauLabUNC/cc_gwas
+- 🔄 **In progress**: Removing hardcoded paths and integrating data generation
+
+## Quick Start
+
+### Test Mode (5 minutes)
+```bash
+# Run test with resource tracking
+sbatch scripts/resource_tracking/submit_with_tracking.sh test "My test description"
+
+# Or without tracking
+sbatch scripts/from_scratch/snakemake/submit_test_mode.sh
+```
+
+### Full Pipeline
+```bash
+# Run full pipeline
+sbatch scripts/from_scratch/snakemake/submit_with_existing.sh
+```
+
+### Resource Reports
+After runs complete, find reports in:
+- `results/resource_reports/[timestamp]_test/usage_report.html`
+- `results/resource_reports/[timestamp]_test/comparison.txt`
+
+## Previous Status (Aug 29, 2025)
 
 **MAJOR PROGRESS**: Complete pipeline configured from QTL scanning through final loci packet generation!
 
