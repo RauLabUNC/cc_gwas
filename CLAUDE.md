@@ -8,7 +8,7 @@ This is a bioinformatics project for miQTL (micro-RNA Quantitative Trait Loci) a
 
 ## Current State & Evolution
 
-### Key Scripts Overview
+### Scripts added by Anh since May
 
 1. **Everything.R** - A consolidated pipeline script that combines multiple analysis steps:
    - Expression data processing (Steps 0-5): Sample filtering, batch correction (ComBat), CPM filtering, VST transformation

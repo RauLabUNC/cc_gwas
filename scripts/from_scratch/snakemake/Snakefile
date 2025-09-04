@@ -4,13 +4,13 @@ import os
 MODE = os.environ.get("SNAKEMAKE_MODE", "full")  # Can be set via environment variable
 
 if MODE == "test":
-    # Test mode: single trait, single treatment, chr1 only
-    QTL_TRAITS = ["BW.day.21"]
+    # Test mode: few traits, both treatments, chr1 only
+    QTL_TRAITS = ["BW.day.0", "BW.day.21", "TH", "LV", "RV", "LA", "RA", "Lung", "Liver", "Adrenal"]
     NORMS = ["boxcox"]
     AGGS = ["individual"]
-    DRUGS = ["Ctrl"]
+    DRUGS = ["Ctrl", "Iso"]
     OUTPUT_PREFIX = "test_"
-    print("Running in TEST mode: 1 trait, 1 treatment, chr1 only")
+    print("Running in TEST mode: 10 traits, 2 treatments, chr1 only")
 else:
     # Full mode: original configuration
     QTL_TRAITS = ["BW.day.21", "LV.Mass.Corrected.21"]

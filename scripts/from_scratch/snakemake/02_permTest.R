@@ -36,11 +36,11 @@ genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 
 # Permute phenotypes and run scans on each
 if (opt$mode == "test") {
-  num_perms <- 5  # Test mode with 5 permutations
+  num_perms <- 20  # Test mode with 5 permutations
   chr_to_scan <- 1  # Only scan chromosome 1
   cat(sprintf("Running in TEST mode - %d permutations on chr 1 only\n", num_perms))
 } else {
-  num_perms <- 20  # Already reduced from 50 for initial testing
+  num_perms <- 50  
   chr_to_scan <- "all"  # Scan all chromosomes
   cat(sprintf("Running in FULL mode - %d permutations on all chromosomes\n", num_perms))
 }

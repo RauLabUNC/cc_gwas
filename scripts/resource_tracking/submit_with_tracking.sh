@@ -46,7 +46,7 @@ SNAKEMAKE_BIN="/nas/longleaf/home/bgural/mambaforge/envs/miqtl-env/bin/snakemake
 
 echo "Running Snakemake pipeline..."
 ${SNAKEMAKE_BIN} --snakefile scripts/from_scratch/snakemake/Snakefile \
-    -j 2 \
+    -j 10 \
     --cluster "sbatch --job-name smk_{rule} --time {resources.time} --mem={resources.mem_mb} -N 1 -n 1 -o /dev/null -e /dev/null --comment='{rule}:{wildcards}'" \
     --latency-wait 60 \
     --printshellcmds 2>&1 | tee "${LOG_DIR}/snakemake.log"
