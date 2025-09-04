@@ -23,6 +23,7 @@ __pycache__/
 *.pyo
 
 # System files
+CLAUDE.MD
 .DS_Store
 .Rproj.user/
 .Rprofile
