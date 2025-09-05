@@ -7,7 +7,8 @@ source("scripts/extras/scan_h2lmm.R")
 # --- Define Command-Line Arguments ---
 option_list <- list(
   make_option(c("--input"), type = "character", help = "Path to input processed phenotype file"),
-  make_option(c("--output"), type = "character", help = "Path to output RDS file"),
+  make_option(c("--output_scan"), type = "character", help = "Path to output RDS file of scan"),
+  make_option(c("--output_perms"), type = "character", help = "Path to output RDS file of permuted phenotypes"),
   make_option(c("--normalization"), type = "character", help = "Normalization method (e.g., zscore, boxcox)"),
   make_option(c("--aggregation"), type = "character", help = "Aggregation method (e.g., individual, mean)"),
   make_option(c("--qtl_trait"), type = "character", help = "QTL trait to analyze"),
@@ -54,12 +55,30 @@ miqtl.rop.scan.scaled <- scan.h2lmm.test(
   chr = chr_to_scan
 )
 
+# Generate permuted phenotypes from the scan object
+
+num_perms <- ifelse(opt$mode == "test", 50, 1000)
+cat(sprintf("\nGenerating %d permutations...\n", num_perms))
+permuted_phenotype <- generate.sample.outcomes.matrix(
+  scan.object = miqtl.rop.scan.scaled,
+  method = "permutation",
+  num.samples = num_perms,
+  use.BLUP = TRUE,
+  model.type = "null"
+)
+
 # --- Save Output ---
 # Ensure the output directory exists
-output_dir <- dirname(opt$output)
-if (!dir.exists(output_dir)) {
-  dir.create(output_dir, recursive = TRUE)
+output_scan_dir <- dirname(opt$output_scan)
+if (!dir.exists(output_scan_dir)) {
+  dir.create(output_scan_dir, recursive = TRUE)
+}
+output_perms_dir <- dirname(opt$output_perms)
+if (!dir.exists(output_perms_dir)) {
+  dir.create(output_perms_dir, recursive = TRUE)
 }
 
+
 # Save the output as an RDS file
-saveRDS(miqtl.rop.scan.scaled, opt$output)
+saveRDS(miqtl.rop.scan.scaled, opt$output_scan)
+saveRDS(permuted_phenotype, opt$output_perms)
