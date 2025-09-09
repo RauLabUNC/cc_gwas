@@ -2,7 +2,7 @@
 library(miqtl)
 library(tidyverse)
 library(optparse)
-source("scripts/extras/scan_h2lmm.R")
+source("scripts/helpers/scan_h2lmm.R")
 
 # --- Define Command-Line Arguments ---
 option_list <- list(

@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=full_permutation_run
-#SBATCH --time=06:00:00
-#SBATCH --mem=4000
+#SBATCH --job-name=test_chr1_only
+#SBATCH --time=00:30:00      
+#SBATCH --mem=10000
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
@@ -23,7 +23,7 @@ conda activate miqtl-env
 set -u
 
 export LD_LIBRARY_PATH=/nas/longleaf/home/bgural/mambaforge/envs/miqtl-env/lib:$LD_LIBRARY_PATH
-export SNAKEMAKE_MODE="full"
+export SNAKEMAKE_MODE="test"
 export RUN_ID LOG_DIR
 
 echo "================================================"
@@ -40,7 +40,7 @@ echo "Snakemake version: $(${SNAKEMAKE_BIN} --version)"
 echo "================================================"
 echo ""
 
-${SNAKEMAKE_BIN} --snakefile scripts/from_scratch/snakemake/smk_para_perm \
+${SNAKEMAKE_BIN} --snakefile scripts/snakemake/smk_para_perm.smk \
   -j 80 \
   --rerun-incomplete --keep-going \
   --latency-wait 60 \

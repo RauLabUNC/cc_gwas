@@ -1,0 +1,42 @@
+paths:
+  # --- General Paths ---
+  log_dir: ".slurmlogs"
+  phenotypes: "data/processed/phenotypes"
+  output_dir: "data/processed"
+  scripts:
+    ropscan: "scripts/01_ropScan.R"
+    perm_chunk: "scripts/02a_runPermChunk.R"
+    perm_agg: "scripts/02b_aggregatePerms.R"
+
+params:
+  # --- Workflow Parameters ---
+  # Parameters that are the same for both modes
+  common:
+    norm: ["boxcox"]
+    agg: ["individual"]
+
+  # Parameters specific to 'test' mode
+  test:
+    qtl_trait: ["BW.day.0", "BW.day.21"]
+    drug: ["Ctrl"]
+    num_perms: 20
+    chunk_size: 5
+
+  # Parameters specific to 'full' mode
+  full:
+    qtl_trait: ["TH.day.0", "TH.day.21"]
+    drug: ["Ctrl", "Iso"]
+    num_perms: 100
+    chunk_size: 10
+
+resources:
+  # --- Cluster Resources ---
+  run_ropscan_and_gen_perms:
+    test: { mem_mb: 400, time: "00:04:00" }
+    full: { mem_mb: 4000, time: "00:30:00" }
+  run_permutation_chunk:
+    test: { mem_mb: 500, time: "00:8:00" }
+    full: { mem_mb: 4000, time: "02:00:00" }
+  aggregate_permutations:
+    test: { mem_mb: 500, time: "00:03:00" }
+    full: { mem_mb: 6000, time: "00:30:00" }
