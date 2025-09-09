@@ -28,7 +28,6 @@ combined_stats <- list(
 )
 
 # Create a mock object for the threshold function.
-# It now contains the cleaned 'combined_stats'.
 mock_threshold_scans <- list(
   max.statistics = combined_stats
 )

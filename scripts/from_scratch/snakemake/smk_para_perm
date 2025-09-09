@@ -1,6 +1,7 @@
 # --- Configuration ---
 import os
 MODE = os.environ.get("SNAKEMAKE_MODE", "full")
+LOG_DIR = os.getenv("LOG_DIR", ".slurmlogs")
 
 if MODE == "test":
     QTL_TRAITS = ["BW.day.0", "BW.day.21"]
@@ -11,13 +12,13 @@ if MODE == "test":
     PERM_CHUNKS = range(1, 5) # 4 chunks of 5 = 20 perms
     CHUNK_SIZE = 5
 else:
-    QTL_TRAITS = ["TH"]
+    QTL_TRAITS = ["TH.day.0", "TH.day.21"]
     NORMS = ["boxcox"]
     AGGS = ["individual"]
-    DRUGS = ["Ctrl"]
+    DRUGS = ["Ctrl", "Iso"]
     OUTPUT_PREFIX = ""
-    PERM_CHUNKS = range(1, 41) # 40 chunks of 5 = 200 perms
-    CHUNK_SIZE = 5
+    PERM_CHUNKS = range(1, 11) # 50 chunks of 10 = 100 perms
+    CHUNK_SIZE = 10
 
 PHENO_DIR = "data/processed/phenotypes"
 ROPSCAN_SCRIPT = "scripts/from_scratch/snakemake/01_ropScan.R"
@@ -31,13 +32,14 @@ rule all:
                norm=NORMS, agg=AGGS, qtl_trait=QTL_TRAITS, drug=DRUGS)
 
 # --- Rule: Run ROP Scan and Generate Permutations ---
+
 rule run_ropscan_and_gen_perms:
     input:
         script=ROPSCAN_SCRIPT,
         processed_pheno=PHENO_DIR + "/{norm}_{agg}_{drug}.csv"
     output:
-        scan="data/processed/" + OUTPUT_PREFIX + "ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds",
-        perms="data/processed/" + OUTPUT_PREFIX + "perm_phenos/{norm}_{agg}_{qtl_trait}_{drug}.rds"
+        scan=f"data/processed/{OUTPUT_PREFIX}ropscan/{{norm}}_{{agg}}_{{qtl_trait}}_{{drug}}.rds",
+        perms=f"data/processed/{OUTPUT_PREFIX}perm_phenos/{{norm}}_{{agg}}_{{qtl_trait}}_{{drug}}.rds"
     params:
         norm="{norm}",
         agg="{agg}",
@@ -46,13 +48,24 @@ rule run_ropscan_and_gen_perms:
         mode=MODE
     resources:
         mem_mb=1000 if MODE == "test" else 4000,
-        time="00:10:00" if MODE == "test" else "00:30:00"
+        time="00:10:00" if MODE == "test" else "00:30:00",
+        threads=1
     log:
-        stdout=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_ropscan_and_gen_perms/{norm}_{agg}_{qtl_trait}_{drug}/stdout",
-        stderr=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_ropscan_and_gen_perms/{norm}_{agg}_{qtl_trait}_{drug}/stderr",
-        time=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_ropscan_and_gen_perms/{norm}_{agg}_{qtl_trait}_{drug}/time"
+        stdout=os.path.join(LOG_DIR, "jobs", "run_ropscan_and_gen_perms",
+                            "{norm}_{agg}_{qtl_trait}_{drug}", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "run_ropscan_and_gen_perms",
+                            "{norm}_{agg}_{qtl_trait}_{drug}", "stderr.log"),
+        time=  os.path.join(LOG_DIR, "jobs", "run_ropscan_and_gen_perms",
+                            "{norm}_{agg}_{qtl_trait}_{drug}", "time.txt")
+    benchmark:
+        os.path.join(LOG_DIR, "bench",
+                    "run_ropscan_and_gen_perms.{norm}_{agg}_{qtl_trait}_{drug}.tsv")
     shell:
         """
+        mkdir -p "$(dirname {output.scan})" "$(dirname {output.perms})" \
+                 "$(dirname {log.stdout})" "$(dirname {log.stderr})" \
+                 "$(dirname {log.time})" 
+
         Rscript {input.script} \
             --input {input.processed_pheno} \
             --output_scan {output.scan} \
@@ -63,18 +76,18 @@ rule run_ropscan_and_gen_perms:
             --drug {params.drug} \
             --mode {params.mode} \
             > {log.stdout} 2> {log.stderr}
-        
-        echo "SLURM_JOB_ID=$SLURM_JOB_ID" >> {log.time} || true
+
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """
 
 # --- Rule: Run Permutation Scan on a Chunk ---
 rule run_permutation_chunk:
     input:
         script=PERMTEST_CHUNK_SCRIPT,
-        perms="data/processed/" + OUTPUT_PREFIX + "perm_phenos/{norm}_{agg}_{qtl_trait}_{drug}.rds",
-        pheno=PHENO_DIR + "/{norm}_{agg}_{drug}.csv"
+        perms=f"data/processed/{OUTPUT_PREFIX}perm_phenos/{{norm}}_{{agg}}_{{qtl_trait}}_{{drug}}.rds",
+        pheno=f"{PHENO_DIR}/{{norm}}_{{agg}}_{{drug}}.csv"
     output:
-        scan_chunk="data/processed/" + OUTPUT_PREFIX + "perm_chunks/{norm}_{agg}_{qtl_trait}_{drug}/{chunk}.rds"
+        scan_chunk=f"data/processed/{OUTPUT_PREFIX}perm_chunks/{{norm}}_{{agg}}_{{qtl_trait}}_{{drug}}/{{chunk}}.rds"
     params:
         qtl_trait="{qtl_trait}",
         drug="{drug}",
@@ -84,11 +97,21 @@ rule run_permutation_chunk:
         mem_mb=2000 if MODE == "test" else 4000,
         time="00:20:00" if MODE == "test" else "02:00:00"
     log:
-        stdout=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_permutation_chunk/{norm}_{agg}_{qtl_trait}_{drug}_{chunk}/stdout",
-        stderr=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_permutation_chunk/{norm}_{agg}_{qtl_trait}_{drug}_{chunk}/stderr",
-        time=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_permutation_chunk/{norm}_{agg}_{qtl_trait}_{drug}_{chunk}/time"
+        stdout=os.path.join(LOG_DIR, "jobs", "run_permutation_chunk",
+                            "{norm}_{agg}_{qtl_trait}_{drug}", "{chunk}", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "run_permutation_chunk",
+                            "{norm}_{agg}_{qtl_trait}_{drug}", "{chunk}", "stderr.log"),
+        time=  os.path.join(LOG_DIR, "jobs", "run_permutation_chunk",
+                            "{norm}_{agg}_{qtl_trait}_{drug}", "{chunk}", "time.txt")
+    benchmark:
+        os.path.join(LOG_DIR, "bench",
+                    "run_permutation_chunk.{norm}_{agg}_{qtl_trait}_{drug}_{chunk}.tsv")
     shell:
         """
+        mkdir -p "$(dirname {output.scan_chunk})" \
+                 "$(dirname {log.stdout})" "$(dirname {log.stderr})" \
+                 "$(dirname {log.time})"
+
         Rscript {input.script} \
             --input_perms {input.perms} \
             --input_pheno {input.pheno} \
@@ -99,8 +122,8 @@ rule run_permutation_chunk:
             --chunk_size {params.chunk_size} \
             --mode {params.mode} \
             > {log.stdout} 2> {log.stderr}
-        
-        echo "SLURM_JOB_ID=$SLURM_JOB_ID" >> {log.time} || true
+
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """
 
 # --- Rule: Aggregate Permutation Chunks and Get Threshold ---
@@ -126,5 +149,5 @@ rule aggregate_permutations:
             {input.chunks} \
             > {log.stdout} 2> {log.stderr}
         
-        echo "SLURM_JOB_ID=$SLURM_JOB_ID" >> {log.time} || true
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """

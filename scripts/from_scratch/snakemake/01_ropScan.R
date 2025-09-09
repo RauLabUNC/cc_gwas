@@ -26,7 +26,6 @@ print(opt)
 # Read the processed phenotype file
 phenotypes <- read.csv(opt$input)
 
-
 # --- Genome Scan Setup ---
 genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
 
