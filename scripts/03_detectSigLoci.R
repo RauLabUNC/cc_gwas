@@ -7,7 +7,6 @@ library(miqtl)     # For genome.plotter.whole
 library(data.table) # For first() / last()
 library(optparse)
 
-
 option_list <- list(
   make_option(c("--input_scans"), type = "character", help = "Paths to input RDS files of scans"),
   make_option(c("--input_thresholds"), type = "character", help = "Paths to input RDS files of thresholds"),
@@ -24,33 +23,42 @@ print(opt)
 scans <- lapply(opt$options$input_scans, readRDS)
 thresholds <- lapply(opt$options$input_thresholds, readRDS)
 
-drugs <- c("Ctrl", "Iso")
-
 # --- List to Store Significant Region Results ---
 all_sig_regions_list <- list()
 
 # --- Iterate Through Traits and Drugs ---
+# Combine scan and threshold lists
+for (i in seq_along(scans)) {
+  scan_path <- opt$options$input_scans[i]
+  thr_path  <- opt$options$input_thresholds[i]
 
-# Combine scan and threshold lists for easier iteration
-for (scan in scans) {
-  # --- Get Scan and Threshold Data ---
-  scan <- scan
-  threshold <- thresholds[[which(scans == scan)]] |> as.numeric() # This should be the threshold value(s)
-  # --- 1. Find Significant Regions  ---
-  # Mark significant markers
+  # Derive trait and drug from filenames:
+  # ropscan/<trait>_<drug>.rds
+  scan_base <- tools::file_path_sans_ext(basename(scan_path))
+  parts <- strsplit(scan_base, "_", fixed = TRUE)[[1]]
+
+  trait <- parts[1]
+  drug_status <- parts[2]
+
+  print(drug_status)
+  print(trait)
+
+  scan <- scans[[i]]
+  threshold <- thresholds[[i]]
+
   is_sig_marker <- scan$LOD > threshold
-  # Group contiguous significant markers
+
   sig_groups_vector <- rep(NA, length(is_sig_marker))
   tf_b <- FALSE
   group <- 0
-  for(i in 1:length(is_sig_marker)){
+  for (j in seq_along(is_sig_marker)) {
     tf_a <- tf_b
-    tf_b <- is_sig_marker[i]
-    if (!is.na(tf_b) && tf_a != tf_b && tf_b == TRUE) { # Added !is.na check
+    tf_b <- is_sig_marker[j]
+    if (!is.na(tf_b) && tf_a != tf_b && tf_b) {
       group <- group + 1
-      sig_groups_vector[i] <- group
-    } else if (!is.na(tf_b) && tf_b == TRUE) {
-      sig_groups_vector[i] <- group
+      sig_groups_vector[j] <- group
+    } else if (!is.na(tf_b) && tf_b) {
+      sig_groups_vector[j] <- group
     }
   }
   

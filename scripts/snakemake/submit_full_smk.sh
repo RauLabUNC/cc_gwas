@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=full_permutation_run
-#SBATCH --time=06:00:00
+#SBATCH --time=012:00:00
 #SBATCH --mem=4000
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
@@ -40,8 +40,8 @@ echo "Snakemake version: $(${SNAKEMAKE_BIN} --version)"
 echo "================================================"
 echo ""
 
-${SNAKEMAKE_BIN} --snakefile scripts/snakemake/smk_para_perm \
-  -j 80 \
+${SNAKEMAKE_BIN} --snakefile scripts/snakemake/smk_para_perm.smk \
+  -j 500 \
   --rerun-incomplete --keep-going \
   --latency-wait 60 \
   --cluster "sbatch \
@@ -60,7 +60,7 @@ SNKM_STATUS=${PIPESTATUS[0]}
 
 # NEW: capture an explicit end time and give accounting a brief moment
 SACCT_END_ISO=$(date +%Y-%m-%dT%H:%M:%S)
-sleep 20
+sleep 120
 
 # NEW: let sacct filter by name; widen JobName to avoid truncation surprises
 sacct -X -P -n -S "${SACCT_START_ISO}" -E "${SACCT_END_ISO}" \

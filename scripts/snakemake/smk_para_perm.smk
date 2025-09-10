@@ -152,12 +152,14 @@ rule aggregate_permutations:
 rule detect_significant_loci:
     input:
         script=config["paths"]["scripts"]["detect_loci"],
-        scan=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}ropscan/{{qtl_trait}}_{{drug}}.rds",
-        threshold=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}scan_thresholds/{{qtl_trait}}_{{drug}}_threshold.rds"
+        scan=lambda wildcards: expand(f"{OUTPUT_DIR}/{OUTPUT_PREFIX}ropscan/{{qtl_trait}}_{{drug}}.rds",
+                                      qtl_trait=QTL_TRAIT, drug=DRUG),
+        threshold=lambda wildcards: expand(f"{OUTPUT_DIR}/{OUTPUT_PREFIX}scan_thresholds/{{qtl_trait}}_{{drug}}_threshold.rds",
+                                           qtl_trait=QTL_TRAIT, drug=DRUG)
     output:
-        summary="{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv",
-        all_thresholds=f"results/{OUTPUT_PREFIX}/trait_qtl/all_thresholds.rds",
-        all_scans=f"results/{OUTPUT_PREFIX}/trait_qtl/all_scans.rds"
+        summary=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv",
+        all_thresholds=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_thresholds.rds",
+        all_scans=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_scans.rds"
     resources:
         mem_mb=config["resources"]["detect_significant_loci"][MODE]["mem_mb"],
         time=config["resources"]["detect_significant_loci"][MODE]["time"]

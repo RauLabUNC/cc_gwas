@@ -26,16 +26,16 @@ params:
 
   # Parameters specific to 'full' mode
   full:
-    qtl_trait: ["TH.day.0", "TH.day.21"]
-    drug: ["Ctrl", "Iso"]
-    num_perms: 100
-    chunk_size: 10
+      qtl_trait: ["BW.day.0", "TH", "LV", "RV", "LA", "RA",  "Wall.Thicknessd.21", "Delta.Wall.Thickness.d", "Percent.Fibrosis", "CSA"]
+      drug: ["Ctrl", "Iso"]
+      num_perms: 100
+      chunk_size: 5
 
 resources:
   # --- Cluster Resources ---
   run_ropscan_and_gen_perms:
     test: { mem_mb: 400, time: "00:04:00" }
-    full: { mem_mb: 4000, time: "00:30:00" }
+    full: { mem_mb: 4000, time: "00:55:00" }
   run_permutation_chunk:
     test: { mem_mb: 500, time: "00:08:00" }
     full: { mem_mb: 4000, time: "02:00:00" }
