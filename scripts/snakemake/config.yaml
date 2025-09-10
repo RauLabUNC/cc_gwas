@@ -3,10 +3,12 @@ paths:
   log_dir: ".slurmlogs"
   phenotypes: "data/processed/phenotypes"
   output_dir: "data/processed"
+  results_dir: "results"
   scripts:
     ropscan: "scripts/01_ropScan.R"
     perm_chunk: "scripts/02a_runPermChunk.R"
     perm_agg: "scripts/02b_aggregatePerms.R"
+    detect_loci: "scripts/03_detectSigLoci.R"
 
 params:
   # --- Workflow Parameters ---
@@ -35,8 +37,11 @@ resources:
     test: { mem_mb: 400, time: "00:04:00" }
     full: { mem_mb: 4000, time: "00:30:00" }
   run_permutation_chunk:
-    test: { mem_mb: 500, time: "00:8:00" }
+    test: { mem_mb: 500, time: "00:08:00" }
     full: { mem_mb: 4000, time: "02:00:00" }
   aggregate_permutations:
     test: { mem_mb: 500, time: "00:03:00" }
     full: { mem_mb: 6000, time: "00:30:00" }
+  detect_significant_loci:
+    test: { mem_mb: 1000, time: "00:05:00" }
+    full: { mem_mb: 8000, time: "00:20:00" }
