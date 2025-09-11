@@ -11,6 +11,8 @@ option_list <- list(
   make_option(c("--input_scans"), type = "character", help = "Paths to input RDS files of scans"),
   make_option(c("--input_thresholds"), type = "character", help = "Paths to input RDS files of thresholds"),
   make_option(c("--output_summary"), type = "character", help = "Path to output CSV file summarizing significant regions"),
+  make_option(c("--output_relational_summary"), type = "character", help = "Path to output CSV file for relational table of trait loci"),
+  make_option(c("--output_pos_summary"), type = "character", help = "Directory to save position reference table"),
   make_option(c("--output_scans"), type = "character", help = "Path to output RDS file of all scans"),
   make_option(c("--output_thresholds"), type = "character", help = "Path to output RDS file of all thresholds")
 )
@@ -19,9 +21,17 @@ parser <- OptionParser(option_list = option_list)
 opt <- parse_args(parser, positional_arguments = TRUE)
 print(opt)
 
-# --- Load Scan and Threshold Data ---
-scans <- lapply(opt$options$input_scans, readRDS)
-thresholds <- lapply(opt$options$input_thresholds, readRDS)
+# --- Load Scans and Thresholds ---
+scan_paths <- strsplit(opt$options$input_scans, ",", fixed = TRUE)[[1]]
+threshold_paths <- strsplit(opt$options$input_thresholds, ",", fixed = TRUE)[[1]]
+
+if (length(scan_paths) != length(threshold_paths)) {
+  stop("Mismatch: number of scans (", length(scan_paths),
+       ") != number of thresholds (", length(threshold_paths), ")")
+}
+
+scans <- lapply(scan_paths, readRDS)
+thresholds <- lapply(threshold_paths, readRDS)
 
 # --- List to Store Significant Region Results ---
 all_sig_regions_list <- list()
@@ -29,8 +39,8 @@ all_sig_regions_list <- list()
 # --- Iterate Through Traits and Drugs ---
 # Combine scan and threshold lists
 for (i in seq_along(scans)) {
-  scan_path <- opt$options$input_scans[i]
-  thr_path  <- opt$options$input_thresholds[i]
+  scan_path <- scan_paths[i]
+  thr_path  <- threshold_paths[i]
 
   # Derive trait and drug from filenames:
   # ropscan/<trait>_<drug>.rds
@@ -71,7 +81,6 @@ for (i in seq_along(scans)) {
     chr = scan$chr,
     stringsAsFactors = FALSE
   )
-  
   # Filter out non-significant markers for block processing
   sig_blocks_df <- sig_df %>% filter(!is.na(block))
   
@@ -153,9 +162,59 @@ merged_regions <- final_sig_regions_df %>%
   filter(keep) %>% 
   dplyr::select(-max_end_seen, -keep)
 
-# --- Save Output ---
+
+# Format columns
+## Format trait QTL data
+trait_loci <- merged_regions |> 
+  mutate(Method = "miQTL",
+         Analysis_Type = "TraitQTL",
+         Dependent_Variable = trait,
+         Treatment = drug,
+         Chr = chr,
+         Locus_Start_bp = upper_pos_lod_drop * 10^6,
+         Locus_End_bp = lower_pos_lod_drop * 10^6,
+         Peak_SNP_ID = Peak_SNP_ID,
+         Peak_SNP_pos_bp = peak_pos * 10^6,
+         Lead_Strain = lead_strain,
+         Peak_Significance_Value = max_lod,
+         Significance_Metric = "LOD",
+         Significance_Threshold = NA,
+         Locus_ID = paste0(Chr, ":", Locus_Start_bp, "-", Locus_End_bp, "_", 
+                           Analysis_Type, "_", Dependent_Variable, "_", Treatment),
+         Position_ID = paste0(Chr, ":", Locus_Start_bp, "-", Locus_End_bp)) |>
+  dplyr::select(Locus_ID, Position_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
+                Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Lead_Strain, Peak_SNP_pos_bp, Peak_Significance_Value,
+                Significance_Metric, Significance_Threshold)
+
+# Make unique position IDs for relational table
+# --- Combine and Parse Position IDs ---
+# Union and deduplicate positions
+pos <- trait_loci$Position_ID %>% unique() %>%
+  as.data.table() %>%
+  setnames("Position_ID")
+
+# Parse Position_ID format: "chr:start-end"
+pos[, c("chr", "start_bp", "end_bp") := 
+      tstrsplit(Position_ID, "[:-]", type.convert = TRUE, keep = 1:3)]
+
+# Calculate locus length
+pos[, length_bp := end_bp - start_bp + 1L]
+
+# Sort by genomic position
+setorder(pos, chr, start_bp)
+
+# --- Format and Save Output ---
+# Rename column for consistency
+setnames(pos, "Position_ID", "pos_id")
+
+# --- Save Outputs ---
+
+if(!dir.exists("data/processed/joinLoci/relational_tables")){
+  dir.create("data/processed/joinLoci/relational_tables", recursive = TRUE)
+}
+
 # Ensure the output directory exists
-summary_dir <- dirname(opt$output_summary)
+summary_dir <- dirname(opt$options$output_summary)
 if (!dir.exists(summary_dir)) {
   dir.create(summary_dir, recursive = TRUE)
 }
@@ -167,6 +226,15 @@ if (!dir.exists(results_dir)) {
 }
 
 write.csv(merged_regions, opt$options$output_summary, row.names = FALSE)
+write.csv(trait_loci, opt$options$output_relational_summary, row.names = FALSE)
 
-saveRDS(boxcox, opt$options$output_scans)
-saveRDS(thresh.b, opt$options$output_thresholds)
+saveRDS(scans, opt$options$output_scans)
+saveRDS(thresholds, opt$options$output_thresholds)
+
+# Save position reference table
+fwrite(pos, opt$options$output_pos_summary)
+
+# Print summary statistics
+cat("Unique positions found:", nrow(pos), "\n")
+cat("Chromosomes covered:", length(unique(pos$chr)), "\n")
+

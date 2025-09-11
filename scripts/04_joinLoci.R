@@ -43,42 +43,12 @@ miqtl_trait_loci_formatted <- miqtl_trait_loci_raw |>
                 Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Lead_Strain, Peak_SNP_pos_bp, Peak_Significance_Value,
                 Significance_Metric, Significance_Threshold)
 
-
-# --- Expression QTLs ---
-
-## miQTL expression loci
-input_dir <- "data/processed/joinLoci/eqtl"
-miqtl_eqtl <- file.path(input_dir, "miQTL", "miQTL_output.csv") |> read.csv(row.names = 1)
-
-## Format eQTL data
-miqtl_eqtl_loci_formatted <- miqtl_eqtl |> 
-  mutate(Method = "miQTL",
-         Analysis_Type = "eQTL",
-         Dependent_Variable = trait,
-         Treatment = treatment,
-         Chr = stringr::str_extract(chr_region, "^[^:]+"),
-         Locus_Start_bp = as.numeric(stringr::str_extract(chr_region, "(?<=:)[0-9]+")),
-         Locus_End_bp = as.numeric(stringr::str_extract(chr_region, "[0-9]+$")),
-         Peak_SNP_ID = lead.snp,
-         Peak_SNP_pos_bp = NA,
-         Lead_Strain = lead.strain,
-         Peak_Significance_Value = lead.snp.LOD,
-         Significance_Metric = "LOD",
-         Significance_Threshold = NA,
-         Locus_ID = paste0(Chr, ":", Locus_Start_bp, "-", Locus_End_bp, "_", 
-                           Analysis_Type, "_", Dependent_Variable, "_", Treatment),
-         Position_ID = paste0(Chr, ":", Locus_Start_bp, "-", Locus_End_bp)) |>
-  dplyr::select(Locus_ID, Position_ID, Method, Analysis_Type, Dependent_Variable, Treatment, Chr,
-                Locus_Start_bp, Locus_End_bp, Peak_SNP_ID, Lead_Strain, Peak_SNP_pos_bp, Peak_Significance_Value,
-                Significance_Metric, Significance_Threshold)
-
 # --- Save Outputs ---
-# Use the formatted miQTL data directly as final output
 trait_loci <- miqtl_trait_loci_formatted
-exp_loci <- miqtl_eqtl_loci_formatted
+
+if(!dir.exists("data/processed/joinLoci/relational_tables")){
+  dir.create("data/processed/joinLoci/relational_tables", recursive = TRUE)
+}
 
 ## Save output
 write.csv(trait_loci, "data/processed/joinLoci/relational_tables/traitLoci.csv", row.names = F)
-
-## Save output
-write.csv(exp_loci, "data/processed/joinLoci/relational_tables/expLoci.csv", row.names = F)

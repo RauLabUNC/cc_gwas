@@ -151,32 +151,36 @@ rule aggregate_permutations:
 # This rule aggregates all scan results and thresholds to identify significant QTL regions
 rule detect_significant_loci:
     input:
-        script=config["paths"]["scripts"]["detect_loci"],
-        scan=lambda wildcards: expand(f"{OUTPUT_DIR}/{OUTPUT_PREFIX}ropscan/{{qtl_trait}}_{{drug}}.rds",
-                                      qtl_trait=QTL_TRAIT, drug=DRUG),
-        threshold=lambda wildcards: expand(f"{OUTPUT_DIR}/{OUTPUT_PREFIX}scan_thresholds/{{qtl_trait}}_{{drug}}_threshold.rds",
-                                           qtl_trait=QTL_TRAIT, drug=DRUG)
+        scans=expand(f"{OUTPUT_DIR}/{OUTPUT_PREFIX}ropscan/{{trait}}_{{drug}}.rds",
+                     trait=QTL_TRAIT, drug=DRUG),
+        thresholds=expand(f"{OUTPUT_DIR}/{OUTPUT_PREFIX}scan_thresholds/{{trait}}_{{drug}}_threshold.rds",
+                          trait=QTL_TRAIT, drug=DRUG),
+        script=config["paths"]["scripts"]["detect_loci"]
     output:
         summary=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv",
-        all_thresholds=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_thresholds.rds",
-        all_scans=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_scans.rds"
-    resources:
-        mem_mb=config["resources"]["detect_significant_loci"][MODE]["mem_mb"],
-        time=config["resources"]["detect_significant_loci"][MODE]["time"]
+        relational_summary=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/traitLoci.csv",
+        pos_summary=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/pos.csv",
+        all_scans=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_scans.rds",
+        all_thresholds=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_thresholds.rds"
+    params:
+        scans_csv=lambda wc, input: ",".join(input.scans),
+        thresholds_csv=lambda wc, input: ",".join(input.thresholds)
     log:
         stdout=os.path.join(LOG_DIR, "jobs", "detect_significant_loci", "stdout.log"),
         stderr=os.path.join(LOG_DIR, "jobs", "detect_significant_loci", "stderr.log"),
         time=os.path.join(LOG_DIR, "jobs", "detect_significant_loci", "time.txt")
+    resources:
+        time=config["resources"]["detect_significant_loci"][MODE]["time"]
     shell:
         """
         mkdir -p "$(dirname {output.summary})" "$(dirname {log.stdout})"
-
         Rscript {input.script} \
-            --input_scans {input.scan} \
-            --input_thresholds {input.threshold} \
-            --output_summary {output.summary} \
-            --output_scans {output.all_scans} \
-            --output_thresholds {output.all_thresholds} > {log.stdout} 2> {log.stderr}
-
+          --input_scans "{params.scans_csv}" \
+          --input_thresholds "{params.thresholds_csv}" \
+          --output_summary {output.summary} \
+          --output_relational_summary {output.relational_summary} \
+          --output_pos_summary {output.pos_summary} \
+          --output_scans {output.all_scans} \
+          --output_thresholds {output.all_thresholds} > {log.stdout} 2> {log.stderr}
         echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """
