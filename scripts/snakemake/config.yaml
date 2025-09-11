@@ -9,6 +9,8 @@ paths:
     perm_chunk: "scripts/02a_runPermChunk.R"
     perm_agg: "scripts/02b_aggregatePerms.R"
     detect_loci: "scripts/03_detectSigLoci.R"
+    query_genes: "scripts/04_queryGenesInLoci.R"
+    make_counts: "scripts/10_makeCounts.R"
 
 params:
   # --- Workflow Parameters ---
@@ -45,3 +47,6 @@ resources:
   detect_significant_loci:
     test: { mem_mb: 1000, time: "00:05:00" }
     full: { mem_mb: 8000, time: "00:20:00" }
+  query_genes_in_loci:
+    test: { mem_mb: 1000, time: "00:05:00" }
+    full: { mem_mb: 4000, time: "00:20:00" }

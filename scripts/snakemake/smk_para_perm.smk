@@ -23,7 +23,7 @@ OUTPUT_DIR = config["paths"]["output_dir"]
 # --- Target Rule ---
 rule all:
     input:
-        f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv"
+        f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/counts_with_meta.csv"
 
 # --- Rule: Run ROP Scan and Generate Permutations ---
 rule run_ropscan_and_gen_perms:
@@ -182,5 +182,49 @@ rule detect_significant_loci:
           --output_pos_summary {output.pos_summary} \
           --output_scans {output.all_scans} \
           --output_thresholds {output.all_thresholds} > {log.stdout} 2> {log.stderr}
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
+        """
+
+rule query_genes_in_loci:
+    input:
+        pos_summary=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/pos.csv",
+        script=config["paths"]["scripts"]["query_genes"]
+    output:
+        genes=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genesInLoci.rds",
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "query_genes_in_loci", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "query_genes_in_loci", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "query_genes_in_loci", "time.txt")
+    resources:
+        time=config["resources"]["query_genes_in_loci"][MODE]["time"]
+    shell:
+        """
+        mkdir -p "$(dirname {output.genes})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_pos_summary "{input.pos_summary}" \
+          --output_genes {output.genes} > {log.stdout} 2> {log.stderr}
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
+        """
+
+rule make_counts_from_star:
+    input:
+        genes_in_trait_loci=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genesInLoci.rds",
+        script=config["paths"]["scripts"]["make_counts"]
+    output:
+        raw_counts=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/raw_counts.csv",
+        counts_with_meta=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/counts_with_meta.csv"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "make_counts_from_star", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "make_counts_from_star", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "make_counts_from_star", "time.txt")
+    resources:
+        time=config["resources"]["query_genes_in_loci"][MODE]["time"]
+    shell:
+        """
+        mkdir -p "$(dirname {output.raw_counts})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_genes_in_trait_loci "{input.genes_in_trait_loci}" \
+          --output_raw_counts {output.raw_counts} \
+          --output_counts_with_meta {output.counts_with_meta} > {log.stdout} 2> {log.stderr}
         echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """

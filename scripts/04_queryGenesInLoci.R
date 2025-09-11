@@ -12,10 +12,20 @@ library(data.table)
 library(dplyr)
 library(tidyr)
 library(biomaRt)
+library(optparse)
 
+option_list <- list(
+  make_option(c("--input_pos_summary"), type = "character", help = "Paths to input RDS files of positions"),
+  make_option(c("--output_genes"), type = "character", help = "Paths to output RDS files of genes")
+)
+
+parser <- OptionParser(option_list = option_list)
+opt <- parse_args(parser, positional_arguments = TRUE)
+
+print(opt)
 # --- Read and Prepare Loci Table ---
 pos_dt <- fread(
-  "data/processed/joinLoci/relational_tables/pos.csv",
+  opt$options$input_pos_summary,
   colClasses = list(
     character = "pos_id",
     character = "chr",
@@ -91,13 +101,13 @@ locus_list_dt <- overlap_dt[
 
 # --- Save Output ---
 # Ensure output directory exists
-output_dir <- "data/processed/joinLoci/relational_tables"
+output_dir <- dirname(opt$options$output_genes)
 if (!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
 }
 
 # Save gene lists per locus
-saveRDS(locus_list_dt, file.path(output_dir, "genesInLoci.rds"))
+saveRDS(locus_list_dt, opt$options$output_genes)
 
 # Print summary
 cat("Loci with genes:", nrow(locus_list_dt), "\n")
