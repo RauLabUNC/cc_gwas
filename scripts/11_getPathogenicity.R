@@ -15,9 +15,23 @@ library(jsonlite)
 library(purrr)
 library(dplyr)
 library(tibble)
+library(optparse)
+
+option_list <- list(
+  make_option(c("--input_genes_in_trait_loci"), type = "character", help = "Path to input table of genes in trait loci"),
+  make_option(c("--output_gene_info"), type = "character", help = "Path to output csv of mouse genes"),
+  make_option(c("--output_associations"), type = "character", help = "Path to output csv of orthology relationships"),
+  make_option(c("--output_constraints"), type = "character", help = "Path to output csv of genetic constraints"),
+  make_option(c("--output_tractability"), type = "character", help = "Path to output csv of drug tractability")
+)
+
+parser <- OptionParser(option_list = option_list)
+opt <- parse_args(parser, positional_arguments = TRUE)
+
+print(opt)
 
 # --- Read Genes in Loci ---
-loci_genes <- readRDS("data/processed/joinLoci/relational_tables/genesInLoci.rds")
+loci_genes <- readRDS(opt$options$input_genes_in_trait_loci)
 
 # Unnest Ensembl IDs per locus
 gene_dt <- loci_genes[, .(mouse_ensembl_id = unlist(Ensembl_IDs)), by = .(pos_id)]
@@ -172,15 +186,15 @@ all_tractability <- bind_rows(tract_list)
 
 # --- Save Outputs ---
 # Ensure output directory exists
-output_dir <- "data/processed/joinLoci/relational_tables"
+output_dir <- dirname(opt$options$output_gene_info)
 if (!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
 }
 
-fwrite(gene_loci_info, file.path(output_dir, "gene_info.csv"))
-fwrite(all_assocs, file.path(output_dir, "associations.csv"))
-fwrite(all_constraints, file.path(output_dir, "constraints.csv"))
-fwrite(all_tractability, file.path(output_dir, "tractability.csv"))
+fwrite(gene_loci_info, opt$options$output_gene_info)
+fwrite(all_assocs, opt$options$output_associations)
+fwrite(all_constraints, opt$options$output_constraints)
+fwrite(all_tractability, opt$options$output_tractability)
 
 cat("\nFiles saved successfully:\n")
 cat("  - gene_info.csv:", nrow(gene_loci_info), "genes\n")

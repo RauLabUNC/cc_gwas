@@ -29,7 +29,7 @@ opt <- parse_args(parser, positional_arguments = TRUE)
 
 print(opt)
 
-genes_in_trait_loci <- read.csv(opt$options$input_genes_in_trait_loci)
+genes_in_trait_loci <- readRDS(opt$options$input_genes_in_trait_loci)
 str(genes_in_trait_loci)
 
 # Function to read a plate's data
@@ -104,9 +104,12 @@ if(!dir.exists(output_dir)){
 write.csv(summarized_counts, opt$options$output_raw_counts, row.names = T)
 
 ###Anh's part, clean up count matrix more### 
-
+# srun -t 5:00:00 -p interact -n 1 --cpus-per-task=1 --mem=32g --pty /bin/bash
+# summarized_counts <- read.csv("data/processed/joinLoci/relational_tables/raw_counts.csv", row.names = 1, check.names = FALSE)
 # Import Brian's cleaned up sample info with ID, plate number, barcode, etc
 sampleInfoBasic <- read.csv("data/processed/phenotypes/sampleInfoBasic.csv")
+print("sampleInfoBasic str:")
+str(sampleInfoBasic)
 #Make a column that matches count colnames
 sampleInfo = sampleInfoBasic %>%
   mutate(CountRep = paste(PlateNumber, AlitheaBarcode, sep="_"))
@@ -119,6 +122,9 @@ rep_depth_df <- tibble(
   TotalReads = as.numeric(total_reads)
 )
 
+print("rep_depth_df str:")
+str(rep_depth_df)
+
 # Join to sample metadata and choose the top-depth replicate per SampleID
 rep_choice <- sampleInfo %>%
   inner_join(rep_depth_df, by = "CountRep") %>%
@@ -126,21 +132,32 @@ rep_choice <- sampleInfo %>%
   slice_max(order_by = TotalReads, n = 1, with_ties = FALSE) %>%
   ungroup()
 
+print("rep_choice str:")
+str(rep_choice)
+
+print("summarized_counts str:")
+str(summarized_counts)
+
 # Subset count matrix to the chosen replicates
-filtered_counts <- summarized_counts[, rep_choice$CountRep, drop = FALSE]
+keep <- colnames(summarized_counts) %in% rep_choice$CountRep # sanity check, should be all TRUE
+filtered_counts <- as.data.frame(summarized_counts)[, keep]
 
 # Reformat to sample rows + metadata
+print("filtered_counts str:")
+str(filtered_counts)
 counts_long <- as.data.frame(t(filtered_counts))
 counts_long$CountRep <- rownames(counts_long)
 
 counts_info <- rep_choice %>%
-  select(SampleID, Strain, Sex, Drug, CountRep, Batch) %>%
+  dplyr::select(SampleID, Strain, Sex, Drug, CountRep, Batch, TotalReads) %>%
   inner_join(counts_long, by = "CountRep") %>%
-  relocate(SampleID, Strain, Sex, Drug, CountRep, Batch)
+  relocate(SampleID, Strain, Sex, Drug, CountRep, Batch, TotalReads)
 
+print("counts_info str:")
+str(counts_info)
 # Write output
 write.csv(
   counts_info,
   opt$options$output_counts_with_meta,
-  row.names = FALSE
+  row.names = T
 )

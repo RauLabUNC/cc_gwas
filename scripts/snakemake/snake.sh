@@ -40,7 +40,7 @@ echo "Snakemake version: $(${SNAKEMAKE_BIN} --version)"
 echo "================================================"
 echo ""
 
-${SNAKEMAKE_BIN} --snakefile scripts/snakemake/smk_para_perm.smk \
+${SNAKEMAKE_BIN} --snakefile scripts/snakemake/Snakefile \
   -j 500 \
   --rerun-incomplete --keep-going \
   --latency-wait 60 \
@@ -54,21 +54,5 @@ ${SNAKEMAKE_BIN} --snakefile scripts/snakemake/smk_para_perm.smk \
   --envvars RUN_ID LOG_DIR SNAKEMAKE_MODE \
   --stats  "${LOG_DIR}/snakemake_stats.json" \
   --printshellcmds 2>&1 | tee "${LOG_DIR}/snakemake.log"
-  # --report "${LOG_DIR}/snakemake_report.html"                              # left commented
 
-SNKM_STATUS=${PIPESTATUS[0]}
-
-# NEW: capture an explicit end time and give accounting a brief moment
-SACCT_END_ISO=$(date +%Y-%m-%dT%H:%M:%S)
-sleep 120
-
-# NEW: let sacct filter by name; widen JobName to avoid truncation surprises
-sacct -X -P -n -S "${SACCT_START_ISO}" -E "${SACCT_END_ISO}" \
-  --name="${RUN_ID}_%" \
-  -o JobID,JobName%60,Partition,AllocCPUS,Elapsed,State,AveCPU,CPUTimeRAW,ReqMem,MaxRSS,MaxVMSize,ExitCode \
-  > "${LOG_DIR}/slurm_metrics.tsv" || true
-
-echo ""
-echo "Pipeline completed at: $(date)  (status=${SNKM_STATUS})"
-exit "${SNKM_STATUS}"
 

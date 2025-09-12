@@ -1,311 +1,336 @@
 # --- Configuration ---
-# Set MODE to "test" for quick testing or "full" for production
 import os
-MODE = os.environ.get("SNAKEMAKE_MODE", "full")  # Can be set via environment variable
+configfile: "scripts/snakemake/config.yaml"
 
-if MODE == "test":
-    # Test mode: few traits, both treatments, chr1 only
-    QTL_TRAITS = ["BW.day.21", "LV.Mass.Corrected.21"]
-    NORMS = ["boxcox"]
-    AGGS = ["individual"]
-    DRUGS = ["Ctrl", "Iso"]
-    OUTPUT_PREFIX = "test_"
-    print("Running in TEST mode: 10 traits, 2 treatments, chr1 only")
-else:
-    # Full mode: original configuration
-    QTL_TRAITS = ["BW.day.0", "BW.day.21", "TH", "LV", "RV", "LA", "RA", "Lung", "Liver", "Adrenal"]
-    NORMS = ["boxcox"]
-    AGGS = ["individual"]
-    DRUGS = ["Ctrl", "Iso"]
-    OUTPUT_PREFIX = ""
-    print("Running in FULL mode: all traits and treatments")
+# --- Set Up Mode-Specific Variables ---
+MODE = os.environ.get("SNAKEMAKE_MODE", "full")
+LOG_DIR = os.getenv("LOG_DIR", config["paths"]["log_dir"])
 
-# Input paths
-PHENO_DIR = "data/processed/phenotypes"  # Using existing preprocessed files
-GENOME_CACHE = "data/raw/genomes/haplotype_cache_cc_083024"  # Will symlink to original
+# Get mode-specific parameters from the config
+MODE_PARAMS = config["params"][MODE]
+QTL_TRAIT = MODE_PARAMS["qtl_trait"]
+DRUG = MODE_PARAMS["drug"]
+CHUNK_SIZE = MODE_PARAMS["chunk_size"]
+NUM_PERMS = MODE_PARAMS["num_perms"]
 
-# Script paths
-ROPSCAN_SCRIPT = "scripts/from_scratch/snakemake/01_ropScan.R"
-PERMTEST_SCRIPT = "scripts/from_scratch/snakemake/02_permTest.R"
+# Calculate chunks dynamically
+PERM_CHUNKS = range(1, (NUM_PERMS // CHUNK_SIZE) + 1)
 
-# Script paths for downstream analysis
-DETECT_LOCI_SCRIPT = "scripts/from_scratch/03_detectSigLoci.R"
-JOIN_LOCI_SCRIPT = "scripts/from_scratch/04_joinLoci.R"
-JOIN_POSITION_SCRIPT = "scripts/from_scratch/10_joinPositionID.R"
-MERGE_LOCI_GENES_SCRIPT = "scripts/from_scratch/11_mergeLociDetectGenes.R"
-SPLIT_GENES_SCRIPT = "scripts/from_scratch/12_splitGenesToSpecies.R"
-GET_PATHOGENICITY_SCRIPT = "scripts/from_scratch/20_getPathogenicity.R"
-GET_MOUSE_PHENOTYPES_SCRIPT = "scripts/from_scratch/21_getMouseGenePhenotypes.R"
-MULT_TRAIT_CIS_SCRIPT = "scripts/from_scratch/13_multTrait_cis-eQTL_nrvmExp.R"  # Modified to remove PyLMM dependency
-MAKE_LOCI_PACKETS_SCRIPT = "scripts/from_scratch/22_makeLociPackets.R"
+# Define output prefix based on mode
+OUTPUT_PREFIX = "test_" if MODE == "test" else ""
+OUTPUT_DIR = config["paths"]["output_dir"]
 
 # --- Target Rule ---
 rule all:
     input:
-        # For now, stop after permutation testing in test mode
-        expand("data/processed/" + OUTPUT_PREFIX + "scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_threshold.rds",
-               norm=NORMS, agg=AGGS, qtl_trait=QTL_TRAITS, drug=DRUGS) if MODE == "test" else
-        # Complete pipeline outputs - final QTL packets (full mode)
-        "results/" + OUTPUT_PREFIX + "qtl_packets/all_loci.zip"
+           f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/counts_with_meta.csv",
+           f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv"
 
-# --- Rule: Run ROP Scan ---
-rule run_ropscan:
+# --- Rule: Run ROP Scan and Generate Permutations ---
+rule run_ropscan_and_gen_perms:
     input:
-        script=ROPSCAN_SCRIPT,
-        processed_pheno=PHENO_DIR + "/{norm}_{agg}_{drug}.csv"
+        script=config["paths"]["scripts"]["ropscan"],
+        processed_pheno=f"{config['paths']['phenotypes']}/{{drug}}.csv"
     output:
-        scan="data/processed/" + OUTPUT_PREFIX + "ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds"
+        scan=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}ropscan/{{qtl_trait}}_{{drug}}.rds",
+        perms=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}perm_phenos/{{qtl_trait}}_{{drug}}.rds"
     params:
-        norm=lambda wildcards: wildcards.norm,
-        agg=lambda wildcards: wildcards.agg,
-        qtl_trait=lambda wildcards: wildcards.qtl_trait,
-        drug=lambda wildcards: wildcards.drug,
+        qtl_trait="{qtl_trait}",
+        drug="{drug}",
         mode=MODE
-    log:
-        stdout=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_ropscan/{norm}_{agg}_{qtl_trait}_{drug}/stdout",
-        stderr=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_ropscan/{norm}_{agg}_{qtl_trait}_{drug}/stderr",
-        time=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_ropscan/{norm}_{agg}_{qtl_trait}_{drug}/time"
-    benchmark:
-        "bench/run_ropscan/{norm}_{agg}_{qtl_trait}_{drug}.txt"
     resources:
-        mem_mb=1000 if MODE == "test" else 4000,
-        time="00:10:00" if MODE == "test" else "01:00:00"
+        mem_mb=config["resources"]["run_ropscan_and_gen_perms"][MODE]["mem_mb"],
+        time=config["resources"]["run_ropscan_and_gen_perms"][MODE]["time"],
+        threads=1
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "run_ropscan_and_gen_perms",
+                            "{qtl_trait}_{drug}", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "run_ropscan_and_gen_perms",
+                            "{qtl_trait}_{drug}", "stderr.log"),
+        time=  os.path.join(LOG_DIR, "jobs", "run_ropscan_and_gen_perms",
+                            "{qtl_trait}_{drug}", "time.txt")
+    benchmark:
+        os.path.join(LOG_DIR, "bench",
+                    "run_ropscan_and_gen_perms.{qtl_trait}_{drug}.tsv")
     shell:
         """
-        mkdir -p $(dirname {log.stdout})
-        /usr/bin/time -v -o {log.time} \
+        mkdir -p "$(dirname {output.scan})" "$(dirname {output.perms})" \
+                 "$(dirname {log.stdout})" "$(dirname {log.stderr})" \
+                 "$(dirname {log.time})" 
+
         Rscript {input.script} \
             --input {input.processed_pheno} \
-            --output {output.scan} \
-            --normalization {params.norm} \
-            --aggregation {params.agg} \
+            --output_scan {output.scan} \
+            --output_perms {output.perms} \
             --qtl_trait {params.qtl_trait} \
             --drug {params.drug} \
             --mode {params.mode} \
             > {log.stdout} 2> {log.stderr}
-        
-        echo "SLURM_JOB_ID=$SLURM_JOB_ID" >> {log.time} || true
+
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """
 
-# --- Rule: Permutation Analysis (20 permutations only) ---
-rule run_permutation:
+# --- Rule: Run Permutation Scan on a Chunk ---
+rule run_permutation_chunk:
     input:
-        script=PERMTEST_SCRIPT,
-        scan="data/processed/" + OUTPUT_PREFIX + "ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds",
-        pheno=PHENO_DIR + "/{norm}_{agg}_{drug}.csv"
+        script=config["paths"]["scripts"]["perm_chunk"],
+        perms=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}perm_phenos/{{qtl_trait}}_{{drug}}.rds",
+        pheno=f"{config['paths']['phenotypes']}/{{drug}}.csv"
     output:
-        threshold="data/processed/" + OUTPUT_PREFIX + "scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_threshold.rds",
-        permuted_scan="data/processed/" + OUTPUT_PREFIX + "scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_perm.rds"
+        scan_chunk=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}perm_chunks/{{qtl_trait}}_{{drug}}/{{chunk}}.rds"
     params:
-        qtl_trait=lambda wildcards: wildcards.qtl_trait,
-        drug=lambda wildcards: wildcards.drug,
+        qtl_trait="{qtl_trait}",
+        drug="{drug}",
+        chunk_size=CHUNK_SIZE,
         mode=MODE
-    log:
-        stdout=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_permutation/{norm}_{agg}_{qtl_trait}_{drug}/stdout",
-        stderr=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_permutation/{norm}_{agg}_{qtl_trait}_{drug}/stderr",
-        time=os.environ.get("LOG_DIR", ".slurmlogs/manual") + "/jobs/run_permutation/{norm}_{agg}_{qtl_trait}_{drug}/time"
-    benchmark:
-        "bench/run_permutation/{norm}_{agg}_{qtl_trait}_{drug}.txt"
     resources:
-        mem_mb=1000 if MODE == "test" else 6000,
-        time="00:10:00" if MODE == "test" else "12:00:00"
+        mem_mb=config["resources"]["run_permutation_chunk"][MODE]["mem_mb"],
+        time=config["resources"]["run_permutation_chunk"][MODE]["time"]
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "run_permutation_chunk",
+                            "{qtl_trait}_{drug}", "{chunk}", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "run_permutation_chunk",
+                            "{qtl_trait}_{drug}", "{chunk}", "stderr.log"),
+        time=  os.path.join(LOG_DIR, "jobs", "run_permutation_chunk",
+                            "{qtl_trait}_{drug}", "{chunk}", "time.txt")
+    benchmark:
+        os.path.join(LOG_DIR, "bench",
+                    "run_permutation_chunk.{qtl_trait}_{drug}_{chunk}.tsv")
     shell:
         """
-        mkdir -p $(dirname {log.stdout})
-        /usr/bin/time -v -o {log.time} \
+        mkdir -p "$(dirname {output.scan_chunk})" \
+                 "$(dirname {log.stdout})"
+
         Rscript {input.script} \
-            --input_scan {input.scan} \
+            --input_perms {input.perms} \
             --input_pheno {input.pheno} \
-            --output_threshold {output.threshold} \
-            --output_scan {output.permuted_scan} \
+            --output_scan_chunk {output.scan_chunk} \
             --qtl_trait {params.qtl_trait} \
             --drug {params.drug} \
-            --mode {params.mode} \
-            > {log.stdout} 2> {log.stderr}
+            --chunk_index {wildcards.chunk} \
+            --chunk_size {params.chunk_size} \
+            --mode {params.mode} > {log.stdout} 2> {log.stderr}
+
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
+        """
+
+# --- Rule: Aggregate Permutation Chunks and Get Threshold ---
+rule aggregate_permutations:
+    input:
+        script=config["paths"]["scripts"]["perm_agg"],
+        chunks=lambda wildcards: expand(f"{OUTPUT_DIR}/{OUTPUT_PREFIX}perm_chunks/{wildcards.qtl_trait}_{wildcards.drug}/{{chunk}}.rds",
+                                        chunk=PERM_CHUNKS)
+    output:
+        threshold=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}scan_thresholds/{{qtl_trait}}_{{drug}}_threshold.rds",
+        max_stats=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}scan_thresholds/{{qtl_trait}}_{{drug}}_max_stats.rds"
+    params:
+        qtl_trait="{qtl_trait}",
+        drug="{drug}"
+    resources:
+        mem_mb=config["resources"]["aggregate_permutations"][MODE]["mem_mb"],
+        time=config["resources"]["aggregate_permutations"][MODE]["time"]
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "aggregate_permutations",
+                            "{qtl_trait}_{drug}", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "aggregate_permutations",
+                            "{qtl_trait}_{drug}", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "aggregate_permutations",
+                          "{qtl_trait}_{drug}", "time.txt")
+    shell:
+        """
+        mkdir -p "$(dirname {output.threshold})" "$(dirname {log.stdout})"
+
+        Rscript {input.script} \
+            --output_threshold {output.threshold} \
+            --output_max_stats {output.max_stats} \
+            {input.chunks} > {log.stdout} 2> {log.stderr}
         
-        echo "SLURM_JOB_ID=$SLURM_JOB_ID" >> {log.time} || true
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """
 
 # --- Rule: Detect Significant Loci ---
 # This rule aggregates all scan results and thresholds to identify significant QTL regions
 rule detect_significant_loci:
     input:
-        # Collect all threshold files
-        thresholds=expand("data/processed/" + OUTPUT_PREFIX + "scan_thresholds/{norm}_{agg}_{qtl_trait}_{drug}_threshold.rds",
-                         norm=NORMS, agg=AGGS, qtl_trait=QTL_TRAITS, drug=DRUGS),
-        # Collect all scan files  
-        scans=expand("data/processed/" + OUTPUT_PREFIX + "ropscan/{norm}_{agg}_{qtl_trait}_{drug}.rds",
-                    norm=NORMS, agg=AGGS, qtl_trait=QTL_TRAITS, drug=DRUGS)
+        scans=expand(f"{OUTPUT_DIR}/{OUTPUT_PREFIX}ropscan/{{trait}}_{{drug}}.rds",
+                     trait=QTL_TRAIT, drug=DRUG),
+        thresholds=expand(f"{OUTPUT_DIR}/{OUTPUT_PREFIX}scan_thresholds/{{trait}}_{{drug}}_threshold.rds",
+                          trait=QTL_TRAIT, drug=DRUG),
+        script=config["paths"]["scripts"]["detect_loci"]
     output:
-        summary="data/processed/joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv",
-        scan_data="results/sig_regions/scan_data.rds",
-        threshold_data="results/sig_regions/threshold_data.rds"
+        summary=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv",
+        relational_summary=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/traitLoci.csv",
+        pos_summary=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/pos.csv",
+        all_scans=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_scans.rds",
+        all_thresholds=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_thresholds.rds"
     params:
-        scan_dir="data/processed/ropscan",
-        threshold_dir="data/processed/scan_thresholds"
+        scans_csv=lambda wc, input: ",".join(input.scans),
+        thresholds_csv=lambda wc, input: ",".join(input.thresholds)
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "detect_significant_loci", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "detect_significant_loci", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "detect_significant_loci", "time.txt")
     resources:
-        mem_mb=16000,
-        time="00:30:00"
+        time=config["resources"]["detect_significant_loci"][MODE]["time"]
     shell:
         """
-        Rscript {DETECT_LOCI_SCRIPT}
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_scans "{params.scans_csv}" \
+          --input_thresholds "{params.thresholds_csv}" \
+          --output_summary {output.summary} \
+          --output_relational_summary {output.relational_summary} \
+          --output_pos_summary {output.pos_summary} \
+          --output_scans {output.all_scans} \
+          --output_thresholds {output.all_thresholds} > {log.stdout} 2> {log.stderr}
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """
 
-# --- Rule: Join Loci ---
-# Formats QTL results into standardized relational tables
-rule join_loci:
+rule query_genes_in_loci:
     input:
-        script=JOIN_LOCI_SCRIPT,
-        trait_qtl="data/processed/joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv"
-        # Note: Script also expects data/processed/joinLoci/eqtl/miQTL/miQTL_output.csv
-        # which must be pre-generated from expression QTL analysis
+        pos_summary=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/pos.csv",
+        script=config["paths"]["scripts"]["query_genes"]
     output:
-        trait_loci="data/processed/joinLoci/relational_tables/traitLoci.csv",
-        exp_loci="data/processed/joinLoci/relational_tables/expLoci.csv"
+        genes=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genesInLoci.rds",
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "query_genes_in_loci", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "query_genes_in_loci", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "query_genes_in_loci", "time.txt")
     resources:
-        mem_mb=8000,
-        time="00:30:00"
+        time=config["resources"]["query_genes_in_loci"][MODE]["time"]
     shell:
         """
-        mkdir -p data/processed/joinLoci/relational_tables
-        Rscript {input.script}
+        mkdir -p "$(dirname {output.genes})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_pos_summary "{input.pos_summary}" \
+          --output_genes {output.genes} > {log.stdout} 2> {log.stderr}
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """
 
-# --- Rule: Join Position IDs ---
-# Consolidates unique positional IDs from QTL tables
-rule join_position_id:
+rule make_counts_from_star:
     input:
-        script=JOIN_POSITION_SCRIPT,
-        trait_loci="data/processed/joinLoci/relational_tables/traitLoci.csv",
-        exp_loci="data/processed/joinLoci/relational_tables/expLoci.csv"
+        genes_in_trait_loci=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genesInLoci.rds",
+        script=config["paths"]["scripts"]["make_counts"]
     output:
-        pos="data/processed/joinLoci/relational_tables/pos.csv"
+        raw_counts=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/raw_counts.csv",
+        counts_with_meta=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/counts_with_meta.csv"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "make_counts_from_star", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "make_counts_from_star", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "make_counts_from_star", "time.txt")
     resources:
-        mem_mb=4000,
-        time="00:15:00"
+        mem_mb=config["resources"]["make_counts_from_star"][MODE]["mem_mb"],
+        time=config["resources"]["make_counts_from_star"][MODE]["time"]
     shell:
         """
-        Rscript {input.script}
+        mkdir -p "$(dirname {output.raw_counts})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_genes_in_trait_loci "{input.genes_in_trait_loci}" \
+          --output_raw_counts {output.raw_counts} \
+          --output_counts_with_meta {output.counts_with_meta} > {log.stdout} 2> {log.stderr}
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """
-
-# --- Rule: Merge Loci and Detect Genes ---
-# Identifies genes within QTL loci using biomaRt
-rule merge_loci_detect_genes:
-    input:
-        script=MERGE_LOCI_GENES_SCRIPT,
-        pos="data/processed/joinLoci/relational_tables/pos.csv"
-    output:
-        genes_in_loci="data/processed/joinLoci/relational_tables/genesInLoci.rds"
-    resources:
-        mem_mb=8000,
-        time="01:00:00"
-    shell:
-        """
-        Rscript {input.script}
-        """
-
-# --- Rule: Get Pathogenicity ---
-# Fetches gene information including orthologs and disease associations
 rule get_pathogenicity:
     input:
-        script=GET_PATHOGENICITY_SCRIPT,
-        genes_in_loci="data/processed/joinLoci/relational_tables/genesInLoci.rds"
+        genes_in_trait_loci=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genesInLoci.rds",
+        script=config["paths"]["scripts"]["get_pathogenicity"]
     output:
-        gene_info="data/processed/joinLoci/relational_tables/gene_info.csv",
-        associations="data/processed/joinLoci/relational_tables/associations.csv",
-        constraints="data/processed/joinLoci/relational_tables/constraints.csv",
-        tractability="data/processed/joinLoci/relational_tables/tractability.csv"
+        gene_info=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/gene_info.csv",
+        associations=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/associations.csv",
+        constraints=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/constraints.csv",
+        tractability=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/tractability.csv"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "get_pathogenicity", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "get_pathogenicity", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "get_pathogenicity", "time.txt")
     resources:
-        mem_mb=12000,
-        time="02:00:00"
+        mem_mb=config["resources"]["get_pathogenicity"][MODE]["mem_mb"],
+        time=config["resources"]["get_pathogenicity"][MODE]["time"]
     shell:
         """
-        Rscript {input.script}
+        mkdir -p "$(dirname {output.gene_info})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_genes_in_trait_loci "{input.genes_in_trait_loci}" \
+          --output_gene_info {output.gene_info} \
+          --output_associations {output.associations} \
+          --output_constraints {output.constraints} \
+          --output_tractability {output.tractability} > {log.stdout} 2> {log.stderr}
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """
-
-# --- Rule: Split Genes to Species ---
-# Splits gene_info into species-specific tables
+        
 rule split_genes_to_species:
     input:
-        script=SPLIT_GENES_SCRIPT,
-        gene_info="data/processed/joinLoci/relational_tables/gene_info.csv"
+        gene_info=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/gene_info.csv",
+        script=config["paths"]["scripts"]["split_genes"]
     output:
-        genes_mouse="data/processed/joinLoci/relational_tables/genes_mouse.csv",
-        orthology="data/processed/joinLoci/relational_tables/orthology.csv"
+        mouse_genes=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genes_mouse.csv",
+        orthology=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/orthology.csv"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "split_genes_to_species", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "split_genes_to_species", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "split_genes_to_species", "time.txt")
     resources:
-        mem_mb=4000,
+        mem_mb=config["resources"]["split_genes_to_species"][MODE]["mem_mb"],
+        time=config["resources"]["split_genes_to_species"][MODE]["time"]
+    shell:
+        """
+        mkdir -p "$(dirname {output.mouse_genes})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_gene_info "{input.gene_info}" \
+          --output_mouse_genes {output.mouse_genes} \
+          --output_orthology {output.orthology} > {log.stdout} 2> {log.stderr}
+        """
+
+rule get_mouse_gene_phenotypes:
+    input:
+        mouse_genes=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genes_mouse.csv",
+        script=config["paths"]["scripts"]["get_mouse_phenotypes"]
+    output:
+        ms_gene_phenos=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/mouseGenePhenotypes.csv"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "get_mouse_gene_phenotypes", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "get_mouse_gene_phenotypes", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "get_mouse_gene_phenotypes", "time.txt")
+    resources:
+        mem_mb=config["resources"]["get_mouse_gene_phenotypes"][MODE]["mem_mb"],
+        time=config["resources"]["get_mouse_gene_phenotypes"][MODE]["time"]
+    shell:
+        """
+        mkdir -p "$(dirname {output.ms_gene_phenos})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_gene_info "{input.mouse_genes}" \
+          --output_ms_gene_phenos {output.ms_gene_phenos} > {log.stdout} 2> {log.stderr}
+        """
+
+# --- Rule: Build Multi-Trait Gene Summary Table ---
+rule build_multitrait_gene_summary:
+    input:
+        genes_mouse=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genes_mouse.csv",
+        orthology=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/orthology.csv",
+        trait_loci=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/traitLoci.csv",
+        associations=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/associations.csv",
+        mouse_pheno=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/mouseGenePhenotypes.csv",
+        script=config["paths"]["scripts"]["build_multitrait_gene_summary"]
+    output:
+        full_table=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv",
+        examples=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/geneTables/multTrait_nrvmExp_disease.csv"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "build_multitrait_gene_summary", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "build_multitrait_gene_summary", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "build_multitrait_gene_summary", "time.txt")
+    resources:
+        mem_mb=8000,
         time="00:15:00"
     shell:
         """
-        Rscript {input.script}
-        """
-
-# --- Rule: Generate Multi-Trait cis-eQTL Gene List ---
-# Creates gene list for mouse phenotype queries
-rule generate_mult_trait_cis:
-    input:
-        script=MULT_TRAIT_CIS_SCRIPT,
-        genes_mouse="data/processed/joinLoci/relational_tables/genes_mouse.csv",
-        orthology="data/processed/joinLoci/relational_tables/orthology.csv",
-        associations="data/processed/joinLoci/relational_tables/associations.csv",
-        trait_loci="data/processed/joinLoci/relational_tables/traitLoci.csv",
-        # Mouse phenotypes will be generated later and merged separately
-        # These files are symlinked from original project:
-        nrvm_counts="data/processed/joinLoci/nrvms/bulk_gene.csv",
-        nrvm_meta="data/processed/joinLoci/nrvms/phenotypes.csv"
-    output:
-        gene_list="results/joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv"
-    resources:
-        mem_mb=8000,
-        time="00:30:00"
-    shell:
-        """
-        mkdir -p results/joinLoci/geneTables
-        Rscript {input.script}
-        """
-
-# --- Rule: Get Mouse Gene Phenotypes ---
-# Queries MouseMine for phenotype annotations
-rule get_mouse_phenotypes:
-    input:
-        script=GET_MOUSE_PHENOTYPES_SCRIPT,
-        gene_list="results/joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv"
-    output:
-        phenotypes="data/processed/joinLoci/relational_tables/mouseGenePhenotypes.csv"
-    resources:
-        mem_mb=8000,
-        time="01:00:00"
-    shell:
-        """
-        Rscript {input.script}
-        """
-
-# --- Rule: Make Loci Packets ---
-# Final rule that creates QTL packets with plots and Excel summaries
-rule make_loci_packets:
-    input:
-        script="scripts/from_scratch/22_makeLociPackets.R",
-        # All required relational tables
-        genes_mouse="data/processed/joinLoci/relational_tables/genes_mouse.csv",
-        orthology="data/processed/joinLoci/relational_tables/orthology.csv",
-        associations="data/processed/joinLoci/relational_tables/associations.csv",
-        trait_loci="data/processed/joinLoci/relational_tables/traitLoci.csv",
-        mouse_pheno="data/processed/joinLoci/relational_tables/mouseGenePhenotypes.csv",
-        gene_list="results/joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv",
-        # Scan results
-        scan_data="results/sig_regions/scan_data.rds",
-        threshold_data="results/sig_regions/threshold_data.rds",
-        # Bulk expression data (symlinked)
-        vst_info="data/processed/joinLoci/bulk_exp/5d_VST_Info_250429.csv",
-        # NRVM data (symlinked)
-        nrvm_counts="data/processed/joinLoci/nrvms/bulk_gene.csv"
-    output:
-        readme="results/" + OUTPUT_PREFIX + "qtl_packets/all_loci.zip"
-    resources:
-        mem_mb=16000,
-        time="02:00:00"
-    shell:
-        """
-        mkdir -p results/qtl_packets
-        Rscript {input.script}
+        mkdir -p $(dirname {output.full_table}) $(dirname {log.stdout})
+        Rscript {input.script} \
+            --input_genes_mouse {input.genes_mouse} \
+            --input_orthology {input.orthology} \
+            --input_trait_loci {input.trait_loci} \
+            --input_associations {input.associations} \
+            --input_mouse_phenotypes {input.mouse_pheno} \
+            --output_gene_table {output.full_table} \
+            --output_examples {output.examples} \
+            > {log.stdout} 2> {log.stderr}
         """

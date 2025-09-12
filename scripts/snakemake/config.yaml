@@ -11,6 +11,11 @@ paths:
     detect_loci: "scripts/03_detectSigLoci.R"
     query_genes: "scripts/04_queryGenesInLoci.R"
     make_counts: "scripts/10_makeCounts.R"
+    get_pathogenicity: "scripts/11_getPathogenicity.R"
+    split_genes: "scripts/12_splitGenesToSpecies.R"
+    get_mouse_phenotypes: "scripts/13_getMouseGenePhenotypes.R"
+    build_multitrait_gene_summary: "scripts/14_buildMultiTraitGeneSummary.R"
+    make_loci_packets: "scripts/21_makeLociPackets.R"
 
 params:
   # --- Workflow Parameters ---
@@ -50,3 +55,18 @@ resources:
   query_genes_in_loci:
     test: { mem_mb: 1000, time: "00:05:00" }
     full: { mem_mb: 4000, time: "00:20:00" }
+  make_counts_from_star:
+    test: { mem_mb: 16000, time: "00:10:00" }
+    full: { mem_mb: 32000, time: "00:20:00" }
+  get_pathogenicity:
+    test: { mem_mb: 8000, time: "00:10:00" }
+    full: { mem_mb: 16000, time: "00:30:00" }
+  split_genes_to_species:
+    test: { mem_mb: 4000, time: "00:05:00" }
+    full: { mem_mb: 8000, time: "00:10:00" }
+  get_mouse_gene_phenotypes:  
+    test: { mem_mb: 4000, time: "00:05:00" }
+    full: { mem_mb: 8000, time: "00:15:00" }
+  make_loci_packets:
+    test: { mem_mb: 8000, time: "00:10:00" }
+    full: { mem_mb: 16000, time: "00:30:00" }

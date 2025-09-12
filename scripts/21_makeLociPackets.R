@@ -10,9 +10,32 @@ library(miqtl)
 library(igraph)          # install.packages("igraph") if you don’t have it
 library(GenomicRanges)
 library(RColorBrewer)
+library(optparse)
 
 # --- 1. Load All Data --- ####
 message("Loading core data tables...")
+
+# --- CLI Options ---
+option_list <- list(
+  make_option(c("--input_sig_regions"), type = "character",
+              default = "data/processed/joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv",
+              help = "Path to miQTL all_significant_regions_summary.csv"),
+  make_option(c("--input_all_scans"), type = "character",
+              default = "data/processed/trait_qtl/all_scans.rds",
+              help = "Path to combined scans RDS"),
+  make_option(c("--input_all_thresholds"), type = "character",
+              default = "data/processed/trait_qtl/all_thresholds.rds",
+              help = "Path to combined thresholds RDS"),
+  make_option(c("--input_merged_gene_info"), type = "character",
+              default = "data/processed/joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv",
+              help = "Path to merged multi-trait gene info CSV"),
+  make_option(c("--output_zip"), type = "character",
+              default = "results/qtl_packets/all_loci.zip",
+              help = "Output zip path for all generated packets")
+)
+
+opt <- parse_args(OptionParser(option_list = option_list))
+print(opt)
 
 # === From multTrait...Exp.R ===
 base_relational <- "data/processed/joinLoci/relational_tables"
@@ -31,15 +54,15 @@ associations  <- fread(paths_multitrait$associations) # Human disease associatio
 mouse_pheno   <- fread(paths_multitrait$mouse_pheno)
 
 # === Data used in plotLoci ===
-sig_regions    <- read_csv("data/processed/joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv") %>%
+sig_regions    <- read_csv(opt$input_sig_regions) %>%
   mutate(
     across(c(upper_pos_lod_drop, peak_pos, lower_pos_lod_drop, max_lod), as.numeric),
     chr = as.character(chr)
   ) %>%
   drop_na(upper_pos_lod_drop, lower_pos_lod_drop, chr, trait, drug)
 
-scan_data      <- readRDS("results/sig_regions/scan_data.rds") # miQTL scan results
-threshold_data <- readRDS("results/sig_regions/threshold_data.rds")
+scan_data      <- readRDS(opt$input_all_scans) # miQTL scan results
+threshold_data <- readRDS(opt$input_all_thresholds)
 
 # PyLMM removed from pipeline - commenting out
 # pyResults <- list() 
@@ -47,7 +70,7 @@ threshold_data <- readRDS("results/sig_regions/threshold_data.rds")
 # pyResults[["Iso"]]  <- fread("data/processed/joinLoci/trait_qtl/PyLMM/Iso_pvals.csv")
 
 # === Merged table output from multTrait_cis-eQTL_nrvmExp.R ===
-merged_gene_info <- fread("results/joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv")
+merged_gene_info <- fread(opt$input_merged_gene_info)
 
 # === CC Founder Variant Information ===
 muNoSplice <- fread("data/processed/joinLoci/relational_tables/ccVariants/Gene_Mutations_CC_WT_NoSplice_OnlyDeleterious_3_31_25.csv")
@@ -1084,5 +1107,8 @@ message("\nAll selected loci processed. Packets generated in: ", base_output_dir
 
 # Zip together the outputs
 # Satisfies a requirement to have a predefined output for Snakemake
-zip("results/qtl_packets/all_loci.zip", "results/qtl_packets/")
+zip_out <- opt$output_zip
+out_dir <- dirname(zip_out)
+if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+zip(zip_out, "results/qtl_packets/")
 
