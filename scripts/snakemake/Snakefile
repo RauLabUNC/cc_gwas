@@ -19,12 +19,14 @@ PERM_CHUNKS = range(1, (NUM_PERMS // CHUNK_SIZE) + 1)
 # Define output prefix based on mode
 OUTPUT_PREFIX = "test_" if MODE == "test" else ""
 OUTPUT_DIR = config["paths"]["output_dir"]
+RESULTS_DIR = config["paths"]["results_dir"]
 
 # --- Target Rule ---
 rule all:
     input:
            f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/counts_with_meta.csv",
-           f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv"
+           f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv",
+           f"{RESULTS_DIR}/qtl_packets/all_loci.zip"
 
 # --- Rule: Run ROP Scan and Generate Permutations ---
 rule run_ropscan_and_gen_perms:
@@ -333,4 +335,33 @@ rule build_multitrait_gene_summary:
             --output_gene_table {output.full_table} \
             --output_examples {output.examples} \
             > {log.stdout} 2> {log.stderr}
+        """
+
+# --- Rule: Make Loci Packets ---
+rule make_loci_packets:
+    input:
+        sig_regions=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv",
+        all_scans=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_scans.rds",
+        all_thresholds=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_thresholds.rds",
+        merged_gene_info=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv",
+        script=config["paths"]["scripts"]["make_loci_packets"]
+    output:
+        zip_file=f"{RESULTS_DIR}/qtl_packets/all_loci.zip"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "make_loci_packets", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "make_loci_packets", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "make_loci_packets", "time.txt")
+    resources:
+        mem_mb=config["resources"]["make_loci_packets"][MODE]["mem_mb"],
+        time=config["resources"]["make_loci_packets"][MODE]["time"]
+    shell:
+        """
+        mkdir -p "$(dirname {output.zip_file})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_sig_regions {input.sig_regions} \
+          --input_all_scans {input.all_scans} \
+          --input_all_thresholds {input.all_thresholds} \
+          --input_merged_gene_info {input.merged_gene_info} \
+          --output_zip {output.zip_file} > {log.stdout} 2> {log.stderr}
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
         """
