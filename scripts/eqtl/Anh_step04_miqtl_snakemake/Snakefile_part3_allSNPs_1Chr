@@ -1,0 +1,39 @@
+# Define the input and output files
+# 2 arrays that will be used to define the input and output files = PHENOS (aka the gene) and TREATMENT
+
+#Part 3 = input list of all genes, get significant loci block, but then output all SNPs in the block on the gene's own chromosome
+
+###Pass on whole list of genes as "phenotypes" ==> PHENOS
+            # Import Python's built-in open function to read the file
+import csv
+            # Read the genes from csv file and store them in the PHENOS variable
+with open("Data/Processed/ExpressionData/TraitLoci_gene_onMyList.csv") as csvfile:
+    reader = csv.reader(csvfile)
+    PHENOS = [row[0] for row in reader if row[0].strip()]
+
+
+###Treatment groups ==> TREATMENT
+TREATMENT = ["control","iso"]
+
+###Define run, can be date or very short description
+RUN=["250602-VST_614"]
+
+
+# Define the final  target
+rule all:
+    input:
+        expand("Results/OneFiveLOD_all_SNPs/GeneOwnChr/{run}/{treatment}/{pheno}_snps.csv", treatment = TREATMENT, pheno=PHENOS, run=RUN)
+
+
+
+# Extract significant loci, get 1.5 LOD support intervals for each significant locus
+rule extract_sig_loci_and_define_sig_bounds:
+    input:
+        "Data/Scans/{RUN}/{TREATMENT}/{PHENOS}_scan_results.rds",
+        "Data/Scan_thresholds/Permute_1Gene1Chr/{RUN}/{TREATMENT}/{PHENOS}_permuted_scan.rds"
+    output:
+        "Results/OneFiveLOD_all_SNPs/GeneOwnChr/{RUN}/{TREATMENT}/{PHENOS}_snps.csv"
+    resources:
+        mem=100
+    shell:
+        "Rscript Scripts/03_01b_SigHaplotypes_all_SNPs_1Chr.R {wildcards.PHENOS} {wildcards.TREATMENT} {wildcards.RUN}"

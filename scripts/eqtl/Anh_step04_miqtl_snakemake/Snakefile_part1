@@ -1,0 +1,39 @@
+# Define the input and output files
+# 2 arrays that will be used to define the input and output files = PHENOS (aka the gene) and TREATMENT
+
+
+#Part 1 = input list of all genes, run genome scans
+
+###Pass on whole list of genes as "phenotypes" ==> PHENOS
+        # Import Python's built-in open function to read the file
+import csv
+        # Read the genes from ListOfGenes.csv and store them in the PHENOS variable
+with open("Data/Processed/ExpressionData/TraitLoci_gene_onMyList.csv") as csvfile:
+    reader = csv.reader(csvfile)
+    PHENOS = [row[0] for row in reader if row[0].strip()]
+
+###Treatment groups ==> TREATMENT
+TREATMENT = ["control", "iso"]
+
+
+###Define run, can be date or very short description. As of 250602 the expresison data set will be VST separately for ctrl/iso with sex group awareness
+#This run has 614 genes from trait loci
+RUN=["250602-VST_614"]
+
+
+# Define the final  target
+rule all:
+    input:
+        expand("Data/Scans/{run}/{treatment}/{pheno}_scan_results.rds", treatment = TREATMENT, pheno=PHENOS, run=RUN)
+
+
+# Rule to run miQTL_ROP_scan.R for each phenotype aka gene
+rule run_miQTL_ROP_scan:
+    input:
+        "Data/Processed/ExpressionData/5d_sepVST_Info_250429.csv"
+    output:
+        "Data/Scans/{RUN}/{TREATMENT}/{PHENOS}_scan_results.rds"
+    resources:
+        mem_gb=1
+    shell:
+        "Rscript Scripts/01_01_miQTL_ROP_scan.R {wildcards.PHENOS} {wildcards.TREATMENT} {wildcards.RUN}"

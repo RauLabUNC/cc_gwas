@@ -1,1 +1,0 @@
-#Summary: does my gene in the trait loci have any eQTL that are also in that trait loci

@@ -264,7 +264,7 @@ generate_locus_zoom_plot <- function(locus_info, # A row from sig_regions or a c
   )
   
   # --- Plot miQTL LOD scores ---
-  current_scan_data <- scan_data[[locus_info$trait]][[locus_info$drug]]
+  current_scan_data <- scan_data[[paste0(locus_info$trait, "_", locus_info$drug)]]
   
   miqtl_df_for_plot <- tibble(
     marker = names(current_scan_data$LOD),
@@ -276,7 +276,7 @@ generate_locus_zoom_plot <- function(locus_info, # A row from sig_regions or a c
     transmute(chrom = paste0("chr", chr), pos, p = 10^(-lod)) #p doesn't really mean P here, plotGardener just wants to take the log10 of this number
   
   # Determine y-axis limits for miQTL plot
-  miqtl_threshold_val <- threshold_data[[locus_info$trait]][[locus_info$drug]] 
+  miqtl_threshold_val <- threshold_data[[paste0(locus_info$trait, "_", locus_info$drug)]]
   miqtl_ylim <- c(0, max(c(-log10(miqtl_df_for_plot$p), miqtl_threshold_val, 5), na.rm = TRUE) + 1)
   
   ## Plot miQTL ##

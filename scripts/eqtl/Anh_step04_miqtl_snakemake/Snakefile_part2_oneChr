@@ -1,0 +1,40 @@
+# Define the input and output files
+#2 arrays that will be used to define the input and output files = PHENOS (aka the gene) and TREATMENT
+
+#Part 2 = take scanned files of certain genes, permute and get significant threshold (p val and LOD), plot threshold, extract significant loci, get 1.5 LOD support intervals for each significant locus
+
+
+# Import Python's built-in open function to read the file
+import csv
+        # Read the genes from csv file (just a list of genes) and store them in the PHENOS variable
+with open("Data/Processed/ExpressionData/TraitLoci_gene_onMyList.csv") as csvfile:
+    reader = csv.reader(csvfile)
+    PHENOS = [row[0] for row in reader if row[0].strip()]
+#PHENOS = ["Pdlim5"]
+
+
+###Treatment groups ==> TREATMENT
+TREATMENT = ["control", "iso"]
+
+
+###Define run, can be date or very short description. As of 250602 the expresison data set will be VST separately for ctrl/iso with sex group awareness
+#This run has 614 genes from trait loci
+RUN=["250602-VST_614"]
+
+
+# Define the final  target
+rule all:
+    input:
+        expand("Data/Scan_thresholds/Permute_1Gene1Chr/{run}/{treatment}/{pheno}_permuted_scan.rds", treatment = TREATMENT, pheno=PHENOS, run=RUN)
+
+
+# Permute and get significant threshold (p val and LOD)
+rule threshold_miQTL_ROP_scan:
+    input:
+        "Data/Scans/{RUN}/{TREATMENT}/{PHENOS}_scan_results.rds",
+    output:
+        "Data/Scan_thresholds/Permute_1Gene1Chr/{RUN}/{TREATMENT}/{PHENOS}_permuted_scan.rds"
+    resources:
+        mem_gb=1
+    shell:
+        "Rscript Scripts/02_01c_Permute_1Gene1Chr.R {wildcards.PHENOS} {wildcards.TREATMENT} {wildcards.RUN}"

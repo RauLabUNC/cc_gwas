@@ -22,10 +22,10 @@ scripts/from_scratch/
 ├── 10_joinPositionID.R       # Consolidate unique positions
 ├── 11_mergeLociDetectGenes.R # Find genes in loci
 ├── 12_splitGenesToSpecies.R  # Split mouse/human genes
-├── 13_multTrait_cis-eQTL_nrvmExp.R # Gene list (modified - no PyLMM)
+├── 13_multTrait_cis-eQTL_nrvmExp.R # Gene list
 ├── 20_getPathogenicity.R     # Disease associations from Open Targets
-├── 21_getMouseGenePhenotypes.R # Mouse phenotypes (BLOCKED - MouseMine offline)
-├── 22_makeLociPackets.R     # Final QTL packets with plots (no PyLMM)
+├── 21_getMouseGenePhenotypes.R # Mouse phenotypes 
+├── 22_makeLociPackets.R     # Final QTL packets with plots
 └── notes.md                  # Detailed docs for each script
 ```
 Logs are organized in `.slurmlogs/YYYY-MM-DD/HHMMSS_JOBID/` with separate files for each rule.

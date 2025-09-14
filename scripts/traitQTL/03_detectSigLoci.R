@@ -33,6 +33,8 @@ if (length(scan_paths) != length(threshold_paths)) {
 scans <- lapply(scan_paths, readRDS)
 thresholds <- lapply(threshold_paths, readRDS)
 
+names(scans) <- sapply(scan_paths, function(p) tools::file_path_sans_ext(basename(p)))
+names(thresholds) <- sapply(threshold_paths, function(p) tools::file_path_sans_ext(basename(p)))
 # --- List to Store Significant Region Results ---
 all_sig_regions_list <- list()
 

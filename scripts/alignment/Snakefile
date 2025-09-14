@@ -1,0 +1,93 @@
+configfile: "config/config.yaml"
+
+def get_barcode_file(wildcards):
+    version = config["barcode_version"][wildcards.sample]
+    if version.startswith("V5B"):
+        return "data/raw/barcodes/v5B_96_clean.txt"
+    else:
+        return "data/raw/barcodes/v5C_96_clean.txt"
+
+rule all:
+    input:
+        # FastQC outputs for all samples
+        expand("data/processed/fastqc/{sample}_R{read}_fastqc.html", 
+                sample=config["samples"].keys(), 
+                read=[1,2]),
+        # Salmon on full samples
+        expand("data/processed/salmon/{sample}/alevin/quants_mat.gz", 
+                sample=config["samples"].keys())
+
+rule fastqc:
+    input:
+        "data/processed/merged_fastq/{sample}_R{read}.fastq.gz"
+    output:
+        html="data/processed/fastqc/{sample}_R{read}_fastqc.html",
+        zip="data/processed/fastqc/{sample}_R{read}_fastqc.zip"
+    resources:
+        mem_mb=8000
+    shell:
+        """
+        mkdir -p data/processed/fastqc
+        fastqc --outdir data/processed/fastqc {input}
+        """
+
+rule truncate_fastq:
+    input:
+        r1="data/processed/merged_fastq/{sample}_R1.fastq.gz",
+        r2="data/processed/merged_fastq/{sample}_R2.fastq.gz"
+    output:
+        r1_trunc="data/processed/merged_fastq/{sample}_R1_trunc.fastq.gz",
+        r2_trunc="data/processed/merged_fastq/{sample}_R2_trunc.fastq.gz"
+    params:
+        proportion=0.002,  # Proportion of reads to keep
+        seed=100  # Seed for reproducibility
+    resources:
+        mem_mb=200000
+    shell:
+        """
+            seqkit sample -p {params.proportion} -s {params.seed} {input.r1} -o {output.r1_trunc} --two-pass
+            seqkit sample -p {params.proportion} -s {params.seed} {input.r2} -o {output.r2_trunc} --two-pass
+        """
+
+rule trim_polyA:
+    input:
+        r2="data/processed/merged_fastq/{sample}_R2.fastq.gz"
+    output:
+        r2_trimmed="data/processed/trimmed/{sample}_R2_nopolyA.fastq.gz"
+    resources:
+        mem_mb=250000
+    shell:
+        """
+        mkdir -p data/processed/trimmed
+        cutadapt -g TTTTT --minimum-length=20 \
+            -o {output.r2_trimmed} {input.r2}
+        """
+rule salmon_quant:
+    input:
+        r1="data/processed/merged_fastq/{sample}_R1.fastq.gz",
+        r2_trimmed="data/processed/trimmed/{sample}_R2_nopolyA.fastq.gz",
+        index="data/raw/anno/salmon_partial_sa_index/",
+        barcodes=get_barcode_file
+    output:
+        quant="data/processed/salmon/{sample}/alevin/quants_mat.gz"
+    params:
+        dir="data/processed/salmon/{sample}"
+    resources:
+        mem_mb=350000
+    threads: 10
+    shell:
+        """
+        salmon alevin -l ISR -i {input.index} \
+            --tgMap data/raw/reference/txp2gene.tsv \
+            --bc-geometry 1[1-14] \
+            --umi-geometry 1[15-28] \
+            --read-geometry 2[1-end] \
+            --whitelist {input.barcodes} \
+            -1 {input.r1} -2 {input.r2_trimmed} \
+            -o {params.dir} \
+            -p 10 \
+            --softclip \
+            --numGibbsSamples 10 \
+            --dumpMtx
+        """
+

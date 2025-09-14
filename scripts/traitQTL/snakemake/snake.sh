@@ -54,5 +54,3 @@ ${SNAKEMAKE_BIN} --snakefile scripts/snakemake/Snakefile \
   --envvars RUN_ID LOG_DIR SNAKEMAKE_MODE \
   --stats  "${LOG_DIR}/snakemake_stats.json" \
   --printshellcmds 2>&1 | tee "${LOG_DIR}/snakemake.log"
-
-
