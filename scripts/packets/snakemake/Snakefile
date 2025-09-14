@@ -1,0 +1,164 @@
+# --- Configuration ---
+import os
+configfile: "scripts/snakemake/config.yaml"
+
+# --- Set Up Mode-Specific Variables ---
+MODE = os.environ.get("SNAKEMAKE_MODE", "full")
+LOG_DIR = os.getenv("LOG_DIR", config["paths"]["log_dir"])
+
+# Get mode-specific parameters from the config
+MODE_PARAMS = config["params"][MODE]
+QTL_TRAIT = MODE_PARAMS["qtl_trait"]
+DRUG = MODE_PARAMS["drug"]
+CHUNK_SIZE = MODE_PARAMS["chunk_size"]
+NUM_PERMS = MODE_PARAMS["num_perms"]
+
+# Calculate chunks dynamically
+PERM_CHUNKS = range(1, (NUM_PERMS // CHUNK_SIZE) + 1)
+
+# Define output prefix based on mode
+OUTPUT_PREFIX = "test_" if MODE == "test" else ""
+OUTPUT_DIR = config["paths"]["output_dir"]
+RESULTS_DIR = config["paths"]["results_dir"]
+
+# --- Target Rule ---
+rule all:
+    input:
+           f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/counts_with_meta.csv",
+           f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv",
+           f"{RESULTS_DIR}/qtl_packets/all_loci.zip"
+
+
+rule get_pathogenicity:
+    input:
+        genes_in_trait_loci=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genesInLoci.rds",
+        script=config["paths"]["scripts"]["get_pathogenicity"]
+    output:
+        gene_info=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/gene_info.csv",
+        associations=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/associations.csv",
+        constraints=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/constraints.csv",
+        tractability=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/tractability.csv"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "get_pathogenicity", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "get_pathogenicity", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "get_pathogenicity", "time.txt")
+    resources:
+        mem_mb=config["resources"]["get_pathogenicity"][MODE]["mem_mb"],
+        time=config["resources"]["get_pathogenicity"][MODE]["time"]
+    shell:
+        """
+        mkdir -p "$(dirname {output.gene_info})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_genes_in_trait_loci "{input.genes_in_trait_loci}" \
+          --output_gene_info {output.gene_info} \
+          --output_associations {output.associations} \
+          --output_constraints {output.constraints} \
+          --output_tractability {output.tractability} > {log.stdout} 2> {log.stderr}
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
+        """
+        
+rule split_genes_to_species:
+    input:
+        gene_info=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/gene_info.csv",
+        script=config["paths"]["scripts"]["split_genes"]
+    output:
+        mouse_genes=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genes_mouse.csv",
+        orthology=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/orthology.csv"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "split_genes_to_species", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "split_genes_to_species", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "split_genes_to_species", "time.txt")
+    resources:
+        mem_mb=config["resources"]["split_genes_to_species"][MODE]["mem_mb"],
+        time=config["resources"]["split_genes_to_species"][MODE]["time"]
+    shell:
+        """
+        mkdir -p "$(dirname {output.mouse_genes})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_gene_info "{input.gene_info}" \
+          --output_mouse_genes {output.mouse_genes} \
+          --output_orthology {output.orthology} > {log.stdout} 2> {log.stderr}
+        """
+
+rule get_mouse_gene_phenotypes:
+    input:
+        mouse_genes=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genes_mouse.csv",
+        script=config["paths"]["scripts"]["get_mouse_phenotypes"]
+    output:
+        ms_gene_phenos=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/mouseGenePhenotypes.csv"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "get_mouse_gene_phenotypes", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "get_mouse_gene_phenotypes", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "get_mouse_gene_phenotypes", "time.txt")
+    resources:
+        mem_mb=config["resources"]["get_mouse_gene_phenotypes"][MODE]["mem_mb"],
+        time=config["resources"]["get_mouse_gene_phenotypes"][MODE]["time"]
+    shell:
+        """
+        mkdir -p "$(dirname {output.ms_gene_phenos})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_gene_info "{input.mouse_genes}" \
+          --output_ms_gene_phenos {output.ms_gene_phenos} > {log.stdout} 2> {log.stderr}
+        """
+
+# --- Rule: Build Multi-Trait Gene Summary Table ---
+rule build_multitrait_gene_summary:
+    input:
+        genes_mouse=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/genes_mouse.csv",
+        orthology=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/orthology.csv",
+        trait_loci=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/traitLoci.csv",
+        associations=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/associations.csv",
+        mouse_pheno=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/mouseGenePhenotypes.csv",
+        script=config["paths"]["scripts"]["build_multitrait_gene_summary"]
+    output:
+        full_table=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv",
+        examples=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/geneTables/multTrait_nrvmExp_disease.csv"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "build_multitrait_gene_summary", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "build_multitrait_gene_summary", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "build_multitrait_gene_summary", "time.txt")
+    resources:
+        mem_mb=8000,
+        time="00:15:00"
+    shell:
+        """
+        mkdir -p $(dirname {output.full_table}) $(dirname {log.stdout})
+        Rscript {input.script} \
+            --input_genes_mouse {input.genes_mouse} \
+            --input_orthology {input.orthology} \
+            --input_trait_loci {input.trait_loci} \
+            --input_associations {input.associations} \
+            --input_mouse_phenotypes {input.mouse_pheno} \
+            --output_gene_table {output.full_table} \
+            --output_examples {output.examples} \
+            > {log.stdout} 2> {log.stderr}
+        """
+
+# --- Rule: Make Loci Packets ---
+rule make_loci_packets:
+    input:
+        sig_regions=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv",
+        all_scans=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_scans.rds",
+        all_thresholds=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}trait_qtl/all_thresholds.rds",
+        merged_gene_info=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv",
+        script=config["paths"]["scripts"]["make_loci_packets"]
+    output:
+        zip_file=f"{RESULTS_DIR}/qtl_packets/all_loci.zip"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "make_loci_packets", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "make_loci_packets", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "make_loci_packets", "time.txt")
+    resources:
+        mem_mb=config["resources"]["make_loci_packets"][MODE]["mem_mb"],
+        time=config["resources"]["make_loci_packets"][MODE]["time"]
+    shell:
+        """
+        mkdir -p "$(dirname {output.zip_file})" "$(dirname {log.stdout})"
+        Rscript {input.script} \
+          --input_sig_regions {input.sig_regions} \
+          --input_all_scans {input.all_scans} \
+          --input_all_thresholds {input.all_thresholds} \
+          --input_merged_gene_info {input.merged_gene_info} \
+          --output_zip {output.zip_file} > {log.stdout} 2> {log.stderr}
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
+        """
