@@ -6,6 +6,7 @@
 # five plates, the n
 # =============================================================================
 
+#! This needs to output data/processed/expression/cc_raw_counts.csv
 # --- Load Libraries ---
 library(tidyr)
 library(dplyr)

@@ -1,0 +1,127 @@
+# --- eQTL mapping by miQTL  ---
+from logging import config
+import os
+import csv
+configfile: "scripts/traitqtl/snakemake/config.yaml"
+
+# --- Mode & Logs (same pattern as main Snakefile) ---
+MODE = os.environ.get("SNAKEMAKE_MODE", "full")
+LOG_DIR = os.getenv("LOG_DIR", config["paths"]["log_dir"])
+
+# Optional output prefix for test mode (kept consistent with main style)
+OUTPUT_PREFIX = "test_" if MODE == "test" else ""
+
+# --- Static variables from partial Snakefiles ---
+# This is the output of the scripts/traitQTL smk 
+# Its a list of genes found within the boundaries of the trait loci
+
+with open("data/processed/expression/genesInTraitLoci.csv") as csvfile:
+    reader = csv.reader(csvfile)
+    PHENOS = [row[0] for row in reader if row and row[0].strip()]
+
+# Get mode-specific parameters from the config
+MODE_PARAMS = config["params"][MODE]
+QTL_TRAIT = MODE_PARAMS["qtl_trait"]
+DRUG = MODE_PARAMS["drug"]
+CHUNK_SIZE = MODE_PARAMS["chunk_size"]
+NUM_PERMS = MODE_PARAMS["num_perms"]
+
+# Calculate chunks dynamically
+PERM_CHUNKS = range(1, (NUM_PERMS // CHUNK_SIZE) + 1)
+
+# Define output prefix based on mode
+OUTPUT_PREFIX = "test_" if MODE == "test" else ""
+OUTPUT_DIR = config["paths"]["output_dir"]
+RESULTS_DIR = config["paths"]["results_dir"]
+# Input file for scans (part 1)
+#SCAN_INPUT_INFO = "data/processed/expression/5d_sepVST_Info_250429.csv"
+
+# R scripts (positional args expected: PHENOS TREATMENT RUN)
+#SCRIPT_SCAN = "scripts/01_01_miQTL_ROP_scan.R"
+#SCRIPT_PERMUTE = "scripts/02_01c_Permute_1Gene1Chr.R"
+#SCRIPT_SIG_SNPS = "scripts/03_01b_SigHaplotypes_all_SNPs_1Chr.R"
+
+# --- Target rule (final outputs from Part 3) ---
+rule all:
+    input:
+        expand(
+            "results/OneFiveLOD_all_SNPs/GeneOwnChr/{run}/{treatment}/{pheno}_snps.csv",
+            run=RUNS,
+            treatment=TREATMENT,
+            pheno=PHENOS,
+        )
+
+# --- Part 1: Prepare phenotype data ---
+rule vst:
+    input:
+        script=config["paths"]["scripts"]["vst"]
+    output:
+        vst_counts=expand(f"{config['paths']['expression']}/{{drug}}.csv", drug=DRUG)
+    params:
+        drug="{drug}"
+    resources:
+        mem_mb=16000,
+        time="00:30:00"
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "vst", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "vst", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "vst", "time.txt")
+    shell:
+        """
+        mkdir -p "$(dirname {log.stdout})"
+
+        Rscript {input.script} \
+            --output_vst_counts {input.vst_counts} \
+            --drug "{params.drug}" \
+            > {log.stdout} 2> {log.stderr}
+
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
+        """
+# --- Part 2: Run miQTL ROP scan per phenotype/treatment ---
+rule run_ropscan:
+    input:
+        counts=f"{config['paths']['expression']['processed']}/{{drug}}.csv",
+        script=config["paths"]["scripts"]["ropscan"]
+    output:
+        scan_result="data/scans/{run}/{treatment}/{pheno}_scan_results.rds"
+    resources:
+        mem_mb=config["resources"]["run_ropscan"][MODE]["mem_mb"],
+        time=config["resources"]["run_ropscan"][MODE]["time"],
+        threads=1
+    params:
+        treatment="{treatment}",
+        mode=MODE
+    log:
+        stdout=os.path.join(LOG_DIR, "jobs", "run_ropscan", "{run}", "{treatment}", "{pheno}", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "run_ropscan", "{run}", "{treatment}", "{pheno}", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "run_ropscan", "{run}", "{treatment}", "{pheno}", "time.txt")
+    benchmark:
+        os.path.join(LOG_DIR, "bench", "run_ropscan.{run}_{treatment}_{pheno}.tsv")
+    shell:
+        """
+        mkdir -p "$(dirname {output.scan_result})" \
+                 "$(dirname {log.stdout})" "$(dirname {log.stderr})" "$(dirname {log.time})"
+
+        Rscript {input.script} {input.counts}  \
+            --input {input.processed_pheno} \
+            --output_scan {output.scan} \
+            --output_perms {output.perms} \
+            --qtl_trait {wildcards.pheno} \
+            --treatment {params.treatment} \
+            --mode {params.mode} \
+            > {log.stdout} 2> {log.stderr}
+
+        echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
+        """
+
+# --- Rule: Run Permutation Scan on a Chunk ---
+rule run_permutation_chunk:
+    input:
+        script=config["paths"]["scripts"]["perm_chunk"],
+        pheno=f"{config['paths']['phenotypes']}/{{drug}}.csv"
+    output:
+        scan_chunk=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}perm_chunks/{{qtl_trait}}_{{drug}}/{{chunk}}.rds"
+    params:
+        drug="{drug}",
+        chunk_size=CHUNK_SIZE,
+        mode=MODE

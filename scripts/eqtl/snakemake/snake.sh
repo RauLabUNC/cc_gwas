@@ -27,7 +27,7 @@ export SNAKEMAKE_MODE="full"
 export RUN_ID LOG_DIR
 
 echo "================================================"
-echo "QTL Pipeline Packet Generation: ${RUN_ID}"
+echo "QTL Pipeline FULL Run: ${RUN_ID}"
 echo "================================================"
 echo "Date: $(date)"
 echo "Working directory: $(pwd)"
@@ -40,8 +40,8 @@ echo "Snakemake version: $(${SNAKEMAKE_BIN} --version)"
 echo "================================================"
 echo ""
 
-${SNAKEMAKE_BIN} --snakefile scripts/packets/snakemake/Snakefile \
-  -j 5 \
+${SNAKEMAKE_BIN} --snakefile scripts/snakemake/Snakefile \
+  -j 500 \
   --rerun-incomplete --keep-going \
   --latency-wait 60 \
   --cluster "sbatch \

@@ -1,0 +1,62 @@
+paths:
+  # --- General Paths ---
+  log_dir: ".slurmlogs"
+  expression: "data/processed/expression"
+  phenotypes: 
+    raw: "data/raw/phenotypes"
+    processed: "data/processed/phenotypes"
+  output_dir: "data/processed"
+  results_dir: "results"
+  scripts:
+    vst: "scripts/eqtl/00_prepareCounts.R"
+    ropscan: "scripts/eqtl/01_ropScan.R"
+    perm_chunk: "scripts/eqtl/02a_runPermChunk.R"
+    perm_agg: "scripts/eqtl/02b_aggregatePerms.R"
+    detect_loci: "scripts/eqtl/03_detectSigLoci.R"
+
+params:
+  # --- Workflow Parameters ---
+  # Parameters specific to 'test' mode
+  test:
+    drug: ["Ctrl"]
+    num_perms: 20
+    chunk_size: 5
+
+  # Parameters specific to 'full' mode
+  full:
+      drug: ["Ctrl", "Iso"]
+      num_perms: 100
+      chunk_size: 5
+
+resources:
+  # --- Cluster Resources ---
+  run_ropscan:
+    test: { mem_mb: 400, time: "00:04:00" }
+    full: { mem_mb: 4000, time: "00:55:00" }
+  run_permutation_chunk:
+    test: { mem_mb: 500, time: "00:08:00" }
+    full: { mem_mb: 4000, time: "02:00:00" }
+  aggregate_permutations:
+    test: { mem_mb: 500, time: "00:03:00" }
+    full: { mem_mb: 6000, time: "00:30:00" }
+  detect_significant_loci:
+    test: { mem_mb: 1000, time: "00:05:00" }
+    full: { mem_mb: 8000, time: "00:20:00" }
+  query_genes_in_loci:
+    test: { mem_mb: 1000, time: "00:05:00" }
+    full: { mem_mb: 4000, time: "00:20:00" }
+  make_counts_from_star:
+    test: { mem_mb: 16000, time: "00:10:00" }
+    full: { mem_mb: 32000, time: "00:20:00" }
+  get_pathogenicity:
+    test: { mem_mb: 8000, time: "00:10:00" }
+    full: { mem_mb: 16000, time: "00:30:00" }
+  split_genes_to_species:
+    test: { mem_mb: 4000, time: "00:05:00" }
+    full: { mem_mb: 8000, time: "00:10:00" }
+  get_mouse_gene_phenotypes:  
+    test: { mem_mb: 4000, time: "00:05:00" }
+    full: { mem_mb: 8000, time: "00:15:00" }
+  make_loci_packets:
+    test: { mem_mb: 8000, time: "00:10:00" }
+    full: { mem_mb: 16000, time: "00:30:00" }

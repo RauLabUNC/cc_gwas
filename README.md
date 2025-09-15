@@ -7,32 +7,26 @@ This doc describes a bioinformatics workflow that joins genetic, transcriptomic,
 ### Full Pipeline
 ```bash
 # Run full pipeline
-sbatch scripts//snakemake/.sh
+sbatch scripts/snakemake/.sh
 ```
 ## Pipeline Structure
-The scripts are numbered to show execution order:
-```
-scripts/from_scratch/
-├── snakemake/
-│   ├── 01_ropScan.R         # Genome-wide QTL scan
-│   ├── 02_permTest.R         # Permutation thresholds
-│   └── Snakefile             # Main workflow (complete pipeline)
-├── 03_detectSigLoci.R        # Find significant regions
-├── 04_joinLoci.R             # Merge trait & expression QTLs (miQTL only)
-├── 10_joinPositionID.R       # Consolidate unique positions
-├── 11_mergeLociDetectGenes.R # Find genes in loci
-├── 12_splitGenesToSpecies.R  # Split mouse/human genes
-├── 13_multTrait_cis-eQTL_nrvmExp.R # Gene list
-├── 20_getPathogenicity.R     # Disease associations from Open Targets
-├── 21_getMouseGenePhenotypes.R # Mouse phenotypes 
-├── 22_makeLociPackets.R     # Final QTL packets with plots
-└── notes.md                  # Detailed docs for each script
-```
+
+Split into four parts:
+- `scripts/align` STAR alignment of bulk RNAseq
+- `scripts/traitQTL` haplotype-trait associations with QTL mapping
+- `scripts/eQTL` haploytype-expression QTL mapping 
+- `scripts/packets ` Join all results into summary packets
+
+Descriptions on how to produce each are found within their respective directories.
+
+
 Logs are organized in `.slurmlogs/YYYY-MM-DD/HHMMSS_JOBID/` with separate files for each rule.
 
 ## Environment Management
 
 ```bash
+# for troubleshooting
+srun -t 5:00:00 -p interact -n 1 --cpus-per-task=1 --mem=16g  --pty /bin/bash
 # Activate the consolidated environment
 source ~/mambaforge/etc/profile.d/conda.sh
 conda activate miqtl-env
