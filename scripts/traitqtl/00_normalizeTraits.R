@@ -7,29 +7,24 @@ suppressPackageStartupMessages({
 
 # Define the command-line arguments
 option_list <- list(
-  make_option(c("--input_raw"),  type = "character", help = "Path to input phenotype CSV file", metavar = "FILE"),
-  make_option(c("--output_boxcox"), type = "character", help = "Path to output processed phenotype CSV file", metavar = "FILE"),
-  make_option(c("--drug"),   type = "character", help = "Drug treatment to filter (e.g., Ctrl, Iso)", default = NULL)
+  make_option(c("--drug"),   type = "character", help = "Drug treatment to filter (e.g., Ctrl, Iso)", default = NULL),
+  make_option(c("--output_boxcox"), type = "character", help = "Output CSV file for Box-Cox transformed phenotypes", default = NULL)
 )
 
 # Parse the arguments
 opt <- parse_args(OptionParser(option_list = option_list))
-if (is.null(opt$options$input_raw) || is.null(opt$options$output_boxcox)) {
-  stop("Both --input_raw and --output_boxcox must be provided.")
-}
-if (!file.exists(opt$options$input_raw)) {
-  stop("Input file does not exist: ", opt$options$input_raw)
-}
 
+print(opt)
+# raw_pheno=f"{config['paths']['phenotypes']['raw']}/CC_Phenotypes_05022025.csv"
 # Read the input phenotype file
-phenotypes <- read.csv(opt$options$input_raw)
-
+#phenotypes <- read.csv(opt$options$input_raw)
+phenotypes <- read.csv("data/raw/phenotypes/CC_Phenotypes_05022025.csv")
 # Filter the data based on the drug treatment (if requested and column exists)
-if (!is.null(opt$options$drug)) {
+if (!is.null(opt$drug)) {
   if (!"Drug" %in% names(phenotypes)) {
     stop("Column 'Drug' not found, but --drug was provided.")
   }
-  phenotypes <- phenotypes |> dplyr::filter(Drug == opt$options$drug)
+  phenotypes <- phenotypes |> dplyr::filter(Drug == opt$drug)
 }
 
 # List columns with measured or extrapolated phenotypes
@@ -118,14 +113,9 @@ pheno_processed <- pheno_processed %>%
 # --- Save Output ---
 
 # Extract output file path from command-line arguments
-output_file <- opt$options$output_boxcox
+output_file <- opt$output_boxcox
 
-# Ensure output directory exists
-output_dir <- dirname(output_file)
-if (!dir.exists(output_dir)) {
-  print(paste("Creating output directory:", output_dir))
-  dir.create(output_dir, recursive = TRUE)
-}
+print(output_file)
 
 print(paste("Saving processed data to:", output_file))
 write.csv(pheno_processed, file = output_file, row.names = F)

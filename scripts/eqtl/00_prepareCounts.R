@@ -4,13 +4,14 @@ suppressPackageStartupMessages({
   library(MASS)
   library(optparse)
   library(sva)
+  library(edgeR)
+  library(DESeq2)
 })
 
 # Define the command-line arguments
 option_list <- list(
-  make_option(c("--output_vst_counts"), type = "character", help = "Path to output processed counts file", metavar = "FILE"),
-  make_option(c("--drug"),   type = "character", help = "Drug treatment to filter (e.g., Ctrl, Iso)", default = NULL)
-)
+  make_option(c("--output_vst_counts"), type = "character", 
+  help = "Path to output processed counts file", metavar = "FILE"))
 
 # Parse the arguments
 opt <- parse_args(OptionParser(option_list = option_list))
@@ -51,17 +52,17 @@ counts_long <- as.data.frame(t(filtered_counts))
 counts_long$CountRep <- rownames(counts_long)
 
 counts_info <- rep_choice %>%
-  dplyr::select(SampleID, Strain, Sex, Drug, CountRep, Batch, TotalReads) %>%
+  dplyr::select(SampleID, Strain, Sex, Drug, CountRep, PlateNumber, TotalReads) %>%
   inner_join(counts_long, by = "CountRep") %>%
-  relocate(SampleID, Strain, Sex, Drug, CountRep, Batch, TotalReads)
+  relocate(SampleID, Strain, Sex, Drug, CountRep, PlateNumber, TotalReads)
 
 # Rename counts matrix with sampleID matching the current CountRep
-colnames(filtered_counts) <- counts_info$SampleID[which(colnames(filtered_counts) %in% counts_info$CountRep)]
+colnames(filtered_counts) <- counts_info$SampleID[match(colnames(filtered_counts), counts_info$CountRep)]
 
-# --- Combat normalization ---
-cb_counts <- sva::ComBat_seq(filtered_counts, batch = sampleInfo$Plate, group = sampleInfo$Drug)
+#### --- ComBat normalization --- ####
+cb_counts <- sva::ComBat_seq(filtered_counts, batch = counts_info$PlateNumber, group = counts_info$Drug)
 
-all(colnames(cb_counts) == counts_info$CountRep) # sanity check, should be all TRUE
+#all(colnames(cb_counts) == counts_info$CountRep) # sanity check, should be all TRUE
 
 # --- Filter for genes with average CPM > 1 ---
 dge <- edgeR::DGEList(counts = cb_counts)

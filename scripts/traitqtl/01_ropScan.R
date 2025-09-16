@@ -23,14 +23,24 @@ opt <- parse_args(OptionParser(option_list = option_list))
 print(opt)
 
 # --- Load Input Data ---
-# Read the processed phenotype file
-phenotypes <- read.csv(opt$input)
-
-# --- Genome Scan Setup ---
+# Genome Scan Setup
 genomecache <- "data/raw/genomes/haplotype_cache_cc_083024"
+
+# Read the processed phenotype file
+phenotypes <- read.csv(opt$input, check.names = FALSE)
+colnames(phenotypes)
+# Ensure covariate type
+if (!"Sex" %in% names(phenotypes)) stop("Sex column missing in phenotypes")
+phenotypes$Sex <- as.factor(phenotypes$Sex)
 
 qtl_trait <- opt$qtl_trait
 print(qtl_trait)
+
+# Verify trait column and build robust formula (handles special chars via backticks)
+if (!qtl_trait %in% names(phenotypes)) {
+  stop(sprintf("Trait '%s' not found in input data", qtl_trait))
+}
+form <- stats::as.formula(paste0("`", qtl_trait, "` ~ 0 + Sex"))
 
 # Set chromosome parameter based on mode
 if (opt$mode == "test") {
@@ -47,7 +57,7 @@ miqtl.rop.scan.scaled <- scan.h2lmm.test(
   data = phenotypes,
   pheno.id = "gwas_temp_id",
   geno.id = "Strain",
-  formula = get(qtl_trait) ~ 0 + Sex,  # Incorporate covariates
+  formula = form,  # do not use get(qtl_trait)
   use.multi.impute = FALSE,
   return.allele.effects = TRUE,
   use.fix.par = TRUE,

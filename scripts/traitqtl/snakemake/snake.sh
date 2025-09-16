@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=full_permutation_run
-#SBATCH --time=012:00:00
+#SBATCH --job-name=traitqtl_full
+#SBATCH --time=24:00:00
 #SBATCH --mem=4000
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
@@ -40,8 +40,8 @@ echo "Snakemake version: $(${SNAKEMAKE_BIN} --version)"
 echo "================================================"
 echo ""
 
-${SNAKEMAKE_BIN} --snakefile scripts/snakemake/Snakefile \
-  -j 500 \
+${SNAKEMAKE_BIN} --snakefile scripts/traitqtl/snakemake/Snakefile \
+  -j 2000 \
   --rerun-incomplete --keep-going \
   --latency-wait 60 \
   --cluster "sbatch \

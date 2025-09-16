@@ -28,27 +28,25 @@ rule all:
 
 rule normalize_traits:
     input:
-        script=config["paths"]["scripts"]["normalize_traits"],
-        raw_pheno=f"{config['paths']['phenotypes']['raw']}/CC_Phenotypes_05022025.csv"
+        script=config["paths"]["scripts"]["normalize_traits"]
     output:
-        boxcox_pheno=expand(f"{config['paths']['phenotypes']['processed']}/{{drug}}.csv", drug=DRUG)
+        boxcox_pheno=f"{config['paths']['phenotypes']['processed']}/{{drug}}.csv"
     params:
-        drugs=DRUG
+        drug="{drug}"
     resources:
         mem_mb=8000,
         time="00:30:00"
     log:
-        stdout=os.path.join(LOG_DIR, "jobs", "normalize_traits", "stdout.log"),
-        stderr=os.path.join(LOG_DIR, "jobs", "normalize_traits", "stderr.log"),
-        time=os.path.join(LOG_DIR, "jobs", "normalize_traits", "time.txt")
+        stdout=os.path.join(LOG_DIR, "jobs", "normalize_traits/{drug}", "stdout.log"),
+        stderr=os.path.join(LOG_DIR, "jobs", "normalize_traits/{drug}", "stderr.log"),
+        time=os.path.join(LOG_DIR, "jobs", "normalize_traits/{drug}", "time.txt")
     shell:
         """
-        mkdir -p "$(dirname {output.processed_pheno[0]})" "$(dirname {log.stdout})"
+        mkdir -p "$(dirname {output.boxcox_pheno})" "$(dirname {log.stdout})"
 
         Rscript {input.script} \
-            --input_raw {input.raw_pheno} \
-            --output_boxcox {input.boxcox_pheno} \
-            --drug "{params.drugs}" \
+            --output_boxcox {output.boxcox_pheno} \
+            --drug "{params.drug}" \
             > {log.stdout} 2> {log.stderr}
 
         echo "SLURM_JOB_ID=${{SLURM_JOB_ID:-NA}}" >> {log.time} || true
@@ -102,7 +100,7 @@ rule run_permutation_chunk:
     input:
         script=config["paths"]["scripts"]["perm_chunk"],
         perms=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}perm_phenos/{{qtl_trait}}_{{drug}}.rds",
-        pheno=f"{config['paths']['phenotypes']}/{{drug}}.csv"
+        pheno=f"{config['paths']['phenotypes']['processed']}/{{drug}}.csv"
     output:
         scan_chunk=f"{OUTPUT_DIR}/{OUTPUT_PREFIX}perm_chunks/{{qtl_trait}}_{{drug}}/{{chunk}}.rds"
     params:
