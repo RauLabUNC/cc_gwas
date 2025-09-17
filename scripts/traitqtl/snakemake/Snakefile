@@ -196,7 +196,9 @@ rule detect_significant_loci:
         stderr=os.path.join(LOG_DIR, "jobs", "detect_significant_loci", "stderr.log"),
         time=os.path.join(LOG_DIR, "jobs", "detect_significant_loci", "time.txt")
     resources:
-        time=config["resources"]["detect_significant_loci"][MODE]["time"]
+        time=config["resources"]["detect_significant_loci"][MODE]["time"],
+        mem_mb=config["resources"]["detect_significant_loci"][MODE]["mem_mb"]
+
     shell:
         """
         mkdir -p "$(dirname {output.summary})" "$(dirname {log.stdout})"

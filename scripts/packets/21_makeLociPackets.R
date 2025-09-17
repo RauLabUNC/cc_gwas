@@ -1,16 +1,18 @@
 # --- 0. Load Libraries ---
 # Core libraries
-library(tidyverse)
-library(data.table)
-library(plotgardener) # For locus plots
-library(TxDb.Mmusculus.UCSC.mm39.knownGene) 
-library(org.Mm.eg.db) # For gene ID mapping
-library(openxlsx) # For writing Excel files
-library(miqtl)
-library(igraph)          # install.packages("igraph") if you don’t have it
-library(GenomicRanges)
-library(RColorBrewer)
-library(optparse)
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(data.table)
+  library(plotgardener) # For locus plots
+  library(TxDb.Mmusculus.UCSC.mm39.knownGene) 
+  library(org.Mm.eg.db) # For gene ID mapping
+  library(openxlsx) # For writing Excel files
+  library(miqtl)
+  library(igraph)          # install.packages("igraph") if you don't have it
+  library(GenomicRanges)
+  library(RColorBrewer)
+  library(optparse)
+})
 
 # --- 1. Load All Data --- ####
 message("Loading core data tables...")
@@ -142,6 +144,7 @@ heart_terms <- c(
 # Create patterns - using word boundaries for more precise matches
 heart_pattern <- paste0("\\b(", paste(heart_terms, collapse="|"), ")\\b|", "LV\\.")
 
+print("Defined global parameters.")
 # --- 2. Define Helper Functions --- ####
 
 # Helper to get genes within a given genomic region
@@ -218,10 +221,10 @@ format_both <- function(genes_df) {
   }
   return(paste(result, collapse="\n\n        "))
 }
-
+print("Defined helper functions.")
 # --- 3. Define Plotting Functions --- ####
 
-# Function to generate Locus Zoom Plot (simplified from your plotLoci_pyLMMvsMiQTL.R)
+# Function to generate Locus Zoom Plot 
 generate_locus_zoom_plot <- function(locus_info, # A row from sig_regions or a custom list
                                      output_dir,
                                      genes_in_locus,
@@ -276,7 +279,7 @@ generate_locus_zoom_plot <- function(locus_info, # A row from sig_regions or a c
     transmute(chrom = paste0("chr", chr), pos, p = 10^(-lod)) #p doesn't really mean P here, plotGardener just wants to take the log10 of this number
   
   # Determine y-axis limits for miQTL plot
-  miqtl_threshold_val <- threshold_data[[paste0(locus_info$trait, "_", locus_info$drug)]]
+  miqtl_threshold_val <- threshold_data[[paste0(locus_info$trait, "_", locus_info$drug, "_threshold")]]
   miqtl_ylim <- c(0, max(c(-log10(miqtl_df_for_plot$p), miqtl_threshold_val, 5), na.rm = TRUE) + 1)
   
   ## Plot miQTL ##
@@ -384,7 +387,7 @@ generate_locus_zoom_plot <- function(locus_info, # A row from sig_regions or a c
       arrange(start)
     colnames(temp_df)[2] <- "score"
     
-    # Need to change data points into ranges, so I'll make a p value continue downstream until the next 
+    # Need to change data points into ranges, so make a p value continue downstream until the next 
     temp_df$end <- c(temp_df$start[2:nrow(temp_df)] - 1L, 
                      temp_df$start[  nrow(temp_df)] + 1)   
     temp_df <- temp_df |> 
@@ -529,7 +532,7 @@ generate_locus_zoom_plot <- function(locus_info, # A row from sig_regions or a c
   dev.off()
   return(plot_file_name)
 }
-
+print("Defined plotting functions.")
 # Function to generate Gene Information Excel File with multiple sheets
 generate_gene_info_excel <- function(genes_in_locus_dt, 
                                      loci_info_df, # Changed: Now expects a data frame of all loci in the cluster
@@ -849,6 +852,7 @@ generate_founder_mutation_table <- function(founder_snps_in_locus_dt, # data.tab
 
 # --- 4. Prepare data  --- ####
 ### Group Loci by chromsome 
+print("Grouping loci into clusters based on overlap...")
 sig_regions <- sig_regions |>
   mutate(start = pmin(upper_pos_lod_drop, lower_pos_lod_drop),
          end   = pmax(upper_pos_lod_drop, lower_pos_lod_drop))
@@ -879,7 +883,7 @@ group_to_process <- unique(sig_regions$locus_cluster)
 base_output_dir <- "results/qtl_packets" 
 if (!dir.exists(base_output_dir)) dir.create(base_output_dir, recursive = TRUE)
 
-for (i in seq_along(group_to_process)) {
+for (i in seq_along(group_to_process[2:length(group_to_process)])) {
   loci <- sig_regions |> filter(locus_cluster %in% group_to_process[i])
   # Create a specific directory for this locus packet
   locus_packet_name <- paste0("locus_chr", loci$chr[[1]],
@@ -920,7 +924,8 @@ for (i in seq_along(group_to_process)) {
            strand= "-",
            traitXdrug = paste0(trait, ": ", drug)) |>  
     dplyr::select(chrom, start, end, strand, trait, drug, traitXdrug)
-  
+  print(loci[1,])
+  print(overlaps[1,])
   # --- B. Generate Locus Zoom Plot ---
   for(j in 1:nrow(loci)){
     print(j )

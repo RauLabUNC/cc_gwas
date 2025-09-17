@@ -36,7 +36,7 @@ mock_threshold_scans <- list(
 cat("Calculating GEV thresholds from combined statistics...\n")
 permute_threshold <- get.gev.thresholds(
   threshold.scans = mock_threshold_scans,
-  percentile = 0.85,
+  percentile = 0.90,
   use.lod = TRUE
 )
 

@@ -40,6 +40,9 @@ echo "Snakemake version: $(${SNAKEMAKE_BIN} --version)"
 echo "================================================"
 echo ""
 
+# Make a DAG of the workflow
+#${SNAKEMAKE_BIN} --snakefile scripts/traitqtl/snakemake/Snakefile --dag | dot -Tpng > pipeline_dag.png
+
 ${SNAKEMAKE_BIN} --snakefile scripts/traitqtl/snakemake/Snakefile \
   -j 2000 \
   --rerun-incomplete --keep-going \
@@ -49,8 +52,8 @@ ${SNAKEMAKE_BIN} --snakefile scripts/traitqtl/snakemake/Snakefile \
     --time={resources.time} \
     --mem={resources.mem_mb} \
     -N 1 -n 1 --cpus-per-task={threads} \
-    -o ${LOG_DIR}/jobs/{rule}/shell_logs/%j.out \
-    -e ${LOG_DIR}/jobs/{rule}/shell_logs/%j.err" \
+    -o ${LOG_DIR}/jobs/{rule}/shell/{wildcards}/%j.out \
+    -e ${LOG_DIR}/jobs/{rule}/shell/{wildcards}/%j.err" \
   --envvars RUN_ID LOG_DIR SNAKEMAKE_MODE \
   --stats  "${LOG_DIR}/snakemake_stats.json" \
   --printshellcmds 2>&1 | tee "${LOG_DIR}/snakemake.log"

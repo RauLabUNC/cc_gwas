@@ -1,6 +1,6 @@
 # --- Configuration ---
 import os
-configfile: "scripts/snakemake/config.yaml"
+configfile: "scripts/packets/snakemake/config.yaml"
 
 # --- Set Up Mode-Specific Variables ---
 MODE = os.environ.get("SNAKEMAKE_MODE", "full")
@@ -24,10 +24,8 @@ RESULTS_DIR = config["paths"]["results_dir"]
 # --- Target Rule ---
 rule all:
     input:
-           f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/relational_tables/counts_with_meta.csv",
            f"{OUTPUT_DIR}/{OUTPUT_PREFIX}joinLoci/geneTables/multTrait_cis-eQTL_nrvmExp.csv",
            f"{RESULTS_DIR}/qtl_packets/all_loci.zip"
-
 
 rule get_pathogenicity:
     input:

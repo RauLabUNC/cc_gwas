@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=full_permutation_run
+#SBATCH --job-name=packet_gen
 #SBATCH --time=012:00:00
 #SBATCH --mem=4000
 #SBATCH --output=/dev/null
