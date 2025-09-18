@@ -42,6 +42,7 @@ echo ""
 
 ${SNAKEMAKE_BIN} --snakefile scripts/packets/snakemake/Snakefile \
   -j 5 \
+  --forcerun make_loci_packets \
   --rerun-incomplete --keep-going \
   --latency-wait 60 \
   --cluster "sbatch \
