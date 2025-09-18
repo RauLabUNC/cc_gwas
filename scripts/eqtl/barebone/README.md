@@ -30,7 +30,7 @@ This README provides an overview of the pipeline for transforming gene expressio
 
 -   **Scripts**:
     -   `GE_eQTL_partA.R`
-    -   `GE_eQTL_partB``.R`
+    -   `GE_eQTL_partB.R`
 -   **Purpose**: For each gene within the significant loci hits from trait QTL analyses, perform eQTL mapping to find regions on the genome that correlate with that gene's expression. Then determine if any of those regions overlaps with the trait loci.
     -   Step 04: Perform genome scan, permutation testing to identify significant threshold (based on LOD score), identify significant haplotype blocks and obtain a list of SNPs within them as well as founder line contribution to each block
     -   Step 05: Using the SNPs positions from step 04, as the question "Does my gene has an eQTL within its respective trait locus?" Iterate this for all the genes from trait-significant loci
