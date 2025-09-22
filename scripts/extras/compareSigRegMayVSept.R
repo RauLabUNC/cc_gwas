@@ -2,7 +2,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(GenomicRanges)
-library(igraph, lib.loc = "/nas/longleaf/home/bgural/mambaforge/envs/miqtl-env/lib")
+library(igraph)
 
 may <- read.csv("results/joinLoci/geneTables/all_significant_regions_summary_may.csv")
 sept <- read.csv("data/processed/joinLoci/trait_qtl/miQTL/all_significant_regions_summary.csv")
@@ -33,7 +33,7 @@ length(sept$trait)
 
 
 ### Group Loci by chromsome 
-sig_regions <- sept |>
+sig_regions <- may |>
   mutate(start = pmin(upper_pos_lod_drop, lower_pos_lod_drop),
          end   = pmax(upper_pos_lod_drop, lower_pos_lod_drop))
 
@@ -54,7 +54,7 @@ g <- graph_from_data_frame(edges,
 ## Connected components = overlapping loci 
 comp <- components(g)$membership
 sig_regions$locus_cluster <- comp
-
+write.csv(sig_regions, "all_significant_regions_summary_may_withClusters.csv", row.names = FALSE)
 # --- 5. Main Loop to Generate Packets --- ####
 
 # Define which loci to process.

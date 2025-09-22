@@ -1,5 +1,5 @@
 # --- Load Libraries ---
-library(InterMineR)
+#library(InterMineR)
 library(data.table)
 library(optparse)
 
@@ -12,56 +12,8 @@ parser <- OptionParser(option_list = option_list)
 opt <- parse_args(parser, positional_arguments = TRUE)
 
 print(opt)
-# --- Load Input Data ---
-genes <- read.csv(opt$options$input_gene_info)
-cat("Genes loaded:", nrow(genes), "\n")
-gene_syms <- unique(stats::na.omit(genes$mouse_gene_symbol))
-# --- Set up MouseMine Connection ---
-im <- initInterMine(mine = listMines()["MouseMine"])
-
-# Get available templates
-template <- getTemplates(im)
-
-# --- Configure Query for Gene Phenotypes ---
-queryGenePath <- getTemplateQuery(
-  im = im, 
-  name = "_Feature_Phenotype"
-)
-
-# We'll batch the gene list into chunks to avoid long URLs (HTTP 414)
-mk_chunk_indices <- function(n, k) ceiling(seq_len(n) / k)
-chunk_size <- 200  # adjust if needed
-chunks <- split(gene_syms, mk_chunk_indices(length(gene_syms), chunk_size))
-
-# --- Execute Query ---
-cat("Querying MouseMine for phenotypes in", length(chunks), "chunks...\n")
-results_list <- vector("list", length(chunks))
-for (i in seq_along(chunks)) {
-  syms <- chunks[[i]]
-  qp <- queryGenePath
-  qp$where[[4]] <- list(
-    path = c("OntologyAnnotation.subject"),
-    op = c("LOOKUP"),
-    value = c(paste(syms, collapse = ",")),
-    code = c("B")
-  )
-  cat(sprintf("  • Chunk %d/%d (%d genes) ... ", i, length(chunks), length(syms)))
-  res <- tryCatch({
-    runQuery(im, qp)
-  }, error = function(e) {
-    warning(sprintf("chunk %d failed: %s", i, e$message))
-    data.frame()
-  })
-  if (NROW(res) > 0) {
-    results_list[[i]] <- res
-    cat(sprintf("%d rows\n", nrow(res)))
-  } else {
-    cat("0 rows\n")
-  }
-  Sys.sleep(0.2)  # be kind to the API
-}
-results <- data.table::rbindlist(results_list, fill = TRUE)
-cat("Phenotype annotations retrieved:", nrow(results), "\n")
+##### Dummy section to just load in old phenos and skip querying #####
+results <- read.csv("/proj/raulab/projects/cc_gwas/data/processed/joinLoci/relational_tables/mouseGenePhenotypes.csv")
 
 # --- Format and Save Output ---
 if (nrow(results) > 0) {

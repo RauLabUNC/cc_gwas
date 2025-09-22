@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
   library(org.Mm.eg.db) # For gene ID mapping
   library(openxlsx) # For writing Excel files
   library(miqtl)
-  library(igraph)          # install.packages("igraph") if you don't have it
+  library(igraph)         
   library(GenomicRanges)
   library(RColorBrewer)
   library(optparse)
@@ -98,8 +98,6 @@ mm39 <- assembly(
 )
 
 message("All data loaded.")
-
-
 
 #### Define global parameters ###
 # use nested list format
@@ -718,6 +716,15 @@ generate_gene_info_excel <- function(genes_in_locus_dt,
     
     if (nrow(gene_mouse_pheno_data) > 0) {
       all_mouse_pheno <- rbindlist(list(all_mouse_pheno, gene_mouse_pheno_data), fill = TRUE)
+    } else {
+      # If no phenotypes, add a row indicating none found
+      all_mouse_pheno <- rbindlist(list(all_mouse_pheno, 
+                                        data.table(Gene = current_gene_symbol, 
+                                                   OntologyTermID = NA_character_, 
+                                                   OntologyTermName = "No phenotypes found", 
+                                                   PubMedID = NA_character_, 
+                                                   Description = NA_character_)), 
+                                   fill = TRUE)
     }
     
     # Human disease associations - add to consolidated table
@@ -849,8 +856,12 @@ generate_founder_mutation_table <- function(founder_snps_in_locus_dt, # data.tab
 }
 
 
+##################################
+#### --- 4. Prepare data  --- ####
+##################################
 
-# --- 4. Prepare data  --- ####
+
+
 ### Group Loci by chromsome 
 print("Grouping loci into clusters based on overlap...")
 sig_regions <- sig_regions |>
@@ -883,7 +894,7 @@ group_to_process <- unique(sig_regions$locus_cluster)
 base_output_dir <- "results/qtl_packets" 
 if (!dir.exists(base_output_dir)) dir.create(base_output_dir, recursive = TRUE)
 
-for (i in seq_along(group_to_process[2:length(group_to_process)])) {
+for (i in seq_along(group_to_process[1:length(group_to_process)])) {
   loci <- sig_regions |> filter(locus_cluster %in% group_to_process[i])
   # Create a specific directory for this locus packet
   locus_packet_name <- paste0("locus_chr", loci$chr[[1]],
@@ -937,7 +948,7 @@ for (i in seq_along(group_to_process[2:length(group_to_process)])) {
                                                 founder_snps_current_locus)
   }
   
-  # --- D. Generate the combined gene info Excel file for all loci in the cluster ---
+  # --- C. Generate the combined gene info Excel file for all loci in the cluster ---
   gene_info_excel_file <- generate_gene_info_excel(
     genes_in_current_locus,
     loci_info_df = loci,  # Pass the entire loci dataframe 

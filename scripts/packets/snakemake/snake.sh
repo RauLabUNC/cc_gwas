@@ -29,7 +29,7 @@ export RUN_ID LOG_DIR
 echo "================================================"
 echo "QTL Pipeline Packet Generation: ${RUN_ID}"
 echo "================================================"
-echo "Date: $(date)"
+echo "Date: $(date)"s
 echo "Working directory: $(pwd)"
 echo "Log directory: ${LOG_DIR}"
 echo "Python: $(which python)"; python --version
