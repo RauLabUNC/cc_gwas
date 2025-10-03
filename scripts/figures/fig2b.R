@@ -53,12 +53,12 @@ if (length(missing_chrs) > 0) {
 }
 
 # set up spacing and dimensions
-width <- 3.4
+width <- 3.1
 height <- 2
 
 # Adjustable gaps (in inches)
 inter_chr_gap <- 0.05    # space between plotted chromosomes
-missing_chr_gap <- 0.05  # space for each missing chromosome
+missing_chr_gap <- 0.08  # space for each missing chromosome
 
 # Solve for chrom_width so layout fits exactly into 'width'
 n_present <- sum(is_present)
@@ -73,14 +73,14 @@ if (chrom_width <= 0) stop("Layout over-constrained: decrease gaps or increase w
 label_y_offset <- 0.1
 usable_height <- height - label_y_offset
 
-pdf("results/paper_figures/fig2b.pdf", width = height + 0.2, height = width + 0.1, useDingbats = FALSE)
+pdf("results/paper_figures/fig2b.pdf", width = height + 0.2, height = width + 0.4, useDingbats = FALSE)
 pageCreate(
   width = height + 0.2, height = width + 0.1, default.units = "inches",
   showGuides = FALSE, xgrid = 0, ygrid = 0
 )
 # March across the target_order, plotting present chromosomes and
 # advancing x by a small gap for missing ones.
-x_current <- 0.05
+x_current <- 0.35
 for (i in seq_along(target_order)) {
   #i <- 1
   chr_label <- ordered_chr[i]
@@ -131,6 +131,8 @@ for (i in seq_along(target_order)) {
   }
 }
 dev.off()
+
+
 
 
 

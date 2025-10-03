@@ -27,6 +27,9 @@ Logs are organized in `.slurmlogs/YYYY-MM-DD/HHMMSS_JOBID/` with separate files 
 ```bash
 # for troubleshooting
 srun -t 5:00:00 -p interact -n 1 --cpus-per-task=1 --mem=16g  --pty /bin/bash
+set +u; conda activate miqtl-env; set -u
+radian # R adapted to work better + with things like VSCode
+
 # Activate the consolidated environment
 set +u
 source ~/mambaforge/etc/profile.d/conda.sh
