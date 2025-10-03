@@ -18,7 +18,7 @@ The workflow consists of four semi-independent components with the following dep
 align (RNA-seq) ────────┐
                         ├──> eQTL ──┐
 traitqtl (QTL) ────────┤            ├──> packets (gene prioritization)
-                        └────────────┘
+                       └────────────┘
 ```
 
 ### 1. Trait QTL Mapping (`scripts/traitqtl/`)
