@@ -4,6 +4,7 @@
 # Top-level files to track
 !README.md
 !.gitignore
+!REFACTORING_NOTES.md
 
 # Scripts folder
 !scripts/
