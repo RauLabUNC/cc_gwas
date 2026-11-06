@@ -187,9 +187,9 @@ This pipeline, although documented, lacks complete integration and streamlining.
 
 ## Citation
 
-Kimball et al. (2026). "Genetic and transcriptomic determinants of heart failure susceptibility in Collaborative Cross mice." Journal TBD. DOI: ####
+Todd H Kimball*, Anh N Luu*, Brian Gural*, Caitlin Lahue, Abigail Hockett, Sriram Ravindran, Amira Ali, Aryan Dalal, Sam Ardery, Emily L Sipko, Logan G Kirkland, Mansi Goyal, Brian C Jensen, Rebecca B Berlow, Christoph D Rau, Genetic determinants of heart failure susceptibility and response in the collaborative cross mouse population, Genetics, Volume 233, Issue 1, May 2026, iyag028, https://doi.org/10.1093/genetics/iyag028
 
 For the gene prioritization methodology, see companion publication:
-Gural et al. (in preparation). "Systematic evidence integration for gene prioritization from large QTL intervals in Collaborative Cross mice." BMC Research Notes.
+Brian Gural, Todd Kimball, Anh N Luu, Christoph D Rau, LocusPackRat: an R package to support prioritizing candidate genes from large GWAS intervals with standardized evidence aggregation, G3 Genes|Genomes|Genetics, Volume 16, Issue 6, June 2026, jkag081, https://doi.org/10.1093/g3journal/jkag081
 
 Rau Lab, University of North Carolina at Chapel Hill
